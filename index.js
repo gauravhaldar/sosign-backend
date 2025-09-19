@@ -20,9 +20,15 @@ connectDB();
 const app = express();
 const PORT = process.env.PORT || 8000;
 
-// Simple CORS for development
+// CORS configuration using environment variables
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : ["http://localhost:3000", "http://localhost:3001"];
+
+console.log("Allowed CORS origins:", allowedOrigins);
+
 app.use(cors({ 
-  origin: ["http://localhost:3000", "http://localhost:3001"], 
+  origin: allowedOrigins,
   credentials: true 
 }));
 
