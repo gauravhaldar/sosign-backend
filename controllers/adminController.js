@@ -1,0 +1,148 @@
+import jwt from "jsonwebtoken";
+import User from "../models/userModel.js";
+import Petition from "../models/petitionModel.js";
+
+const { ADMIN_EMAIL, ADMIN_PASSWORD } = process.env;
+
+// Generate JWT token
+const generateToken = () => {
+  return jwt.sign(
+    { email: ADMIN_EMAIL, id: "admin_user_id" },
+    process.env.JWT_SECRET,
+    { expiresIn: "1d" }
+  );
+};
+
+// Admin login
+export const adminLogin = (req, res) => {
+  const { email, password } = req.body;
+  const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "haldarai@sosign.com";
+  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin12345";
+
+  if (
+    email.trim() === ADMIN_EMAIL.trim() &&
+    password.trim() === ADMIN_PASSWORD.trim()
+  ) {
+    const token = jwt.sign(
+      { email: ADMIN_EMAIL, id: "admin_user_id" },
+      process.env.JWT_SECRET || "default_jwt_secret_key",
+      { expiresIn: "1d" }
+    );
+
+    res.cookie("adminToken", token, {
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000,
+      secure: false, // ✅ Set to false for localhost development
+      sameSite: "lax", // ✅ Changed to lax for localhost
+    });
+
+    return res.status(200).json({ message: "Admin logged in successfully" });
+  } else {
+    return res.status(401).json({ message: "Invalid credentials" });
+  }
+};
+
+// Get current admin
+export const getCurrentAdmin = (req, res) => {
+  const token = req.cookies.adminToken;
+  if (!token) return res.status(401).json({ message: "Not authenticated" });
+
+  try {
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET || "default_jwt_secret_key"
+    );
+    return res.status(200).json({ email: decoded.email });
+  } catch (error) {
+    console.error("JWT verification error in getCurrentAdmin:", error);
+    return res.status(401).json({ message: "Invalid token" });
+  }
+};
+
+// Admin logout
+export const adminLogout = (req, res) => {
+  res.cookie("adminToken", "", {
+    httpOnly: true,
+    expires: new Date(0),
+    secure: false, // ✅ Same as above
+    sameSite: "lax", // ✅ Same as above
+  });
+
+  return res.status(200).json({ message: "Admin logged out successfully" });
+};
+
+//get all users info
+export const getUsers = async (req, res) => {
+  try {
+    console.log("🔍 Fetching users...");
+    const users = await User.find({}, "name email createdAt"); // Select name, email, and createdAt
+    console.log(`👥 Found users: ${users.length}`);
+    console.log(
+      "📅 Sample user with dates:",
+      JSON.stringify(
+        {
+          name: users[0]?.name,
+          email: users[0]?.email,
+          createdAt: users[0]?.createdAt,
+          createdAtType: typeof users[0]?.createdAt,
+        },
+        null,
+        2
+      )
+    );
+    res.json(users);
+  } catch (error) {
+    console.error("❌ Error fetching users:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Delete user
+export const deleteUser = async (req, res) => {
+  try {
+    console.log("Delete user request received for ID:", req.params.id);
+    const { id } = req.params;
+    const user = await User.findById(id);
+
+    if (!user) {
+      console.log("User not found with ID:", id);
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await User.findByIdAndDelete(id);
+    console.log("User deleted successfully:", id);
+    res.json({ message: "User deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Get all unapproved petitions
+export const getUnapprovedPetitions = async (req, res) => {
+  try {
+    const petitions = await Petition.find({ approved: false })
+      .populate("petitionStarter.user", "name email")
+      .sort({ createdAt: -1 });
+    res.status(200).json({ petitions });
+  } catch (error) {
+    console.error("Error fetching unapproved petitions:", error);
+    res.status(500).json({ message: "Error fetching unapproved petitions" });
+  }
+};
+
+// Approve a petition
+export const approvePetition = async (req, res) => {
+  try {
+    const petition = await Petition.findById(req.params.id);
+    if (!petition) {
+      return res.status(404).json({ message: "Petition not found" });
+    }
+    petition.approved = true;
+    await petition.save();
+    res.status(200).json({ message: "Petition approved successfully" });
+  } catch (error) {
+    console.error("Error approving petition:", error);
+    res.status(500).json({ message: "Error approving petition" });
+  }
+};

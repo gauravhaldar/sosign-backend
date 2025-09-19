@@ -1,0 +1,320 @@
+import asyncHandler from "express-async-handler";
+import Comment from "../models/commentModel.js";
+import Petition from "../models/petitionModel.js";
+
+// @desc    Create a new comment
+// @route   POST /api/comments
+// @access  Private
+const createComment = asyncHandler(async (req, res) => {
+  const { petitionId, content } = req.body;
+
+  // Validate required fields
+  if (!petitionId || !content) {
+    res.status(400);
+    throw new Error("Please provide petition ID and comment content");
+  }
+
+  // Check if petition exists
+  const petition = await Petition.findById(petitionId);
+  if (!petition) {
+    res.status(404);
+    throw new Error("Petition not found");
+  }
+
+  // Create comment
+  const comment = await Comment.create({
+    petition: petitionId,
+    user: req.user._id,
+    content: content.trim(),
+  });
+
+  // Populate user details for response
+  await comment.populate("user", "name email designation");
+
+  res.status(201).json({
+    success: true,
+    message: "Comment created successfully",
+    comment,
+  });
+});
+
+// @desc    Get all comments for a petition
+// @route   GET /api/comments/petition/:petitionId
+// @access  Public
+const getCommentsByPetition = asyncHandler(async (req, res) => {
+  const { petitionId } = req.params;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const skip = (page - 1) * limit;
+
+  // Check if petition exists
+  const petition = await Petition.findById(petitionId);
+  if (!petition) {
+    res.status(404);
+    throw new Error("Petition not found");
+  }
+
+  // Get comments with pagination
+  const comments = await Comment.find({ petition: petitionId })
+    .populate("user", "name email designation")
+    .populate("likes.user", "name")
+    .populate("replies.user", "name email designation")
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+
+  const totalComments = await Comment.countDocuments({ petition: petitionId });
+
+  res.status(200).json({
+    success: true,
+    comments,
+    currentPage: page,
+    totalPages: Math.ceil(totalComments / limit),
+    totalComments,
+    hasNextPage: page < Math.ceil(totalComments / limit),
+    hasPrevPage: page > 1,
+  });
+});
+
+// @desc    Update a comment
+// @route   PUT /api/comments/:id
+// @access  Private (Only comment author)
+const updateComment = asyncHandler(async (req, res) => {
+  const { content } = req.body;
+
+  if (!content) {
+    res.status(400);
+    throw new Error("Please provide comment content");
+  }
+
+  const comment = await Comment.findById(req.params.id);
+
+  if (!comment) {
+    res.status(404);
+    throw new Error("Comment not found");
+  }
+
+  // Check if user is the comment author
+  if (!req.user || comment.user.toString() !== req.user._id.toString()) {
+    res.status(403);
+    throw new Error("Not authorized to update this comment");
+  }
+
+  // Update comment
+  comment.content = content.trim();
+  comment.isEdited = true;
+  comment.editedAt = new Date();
+
+  const updatedComment = await comment.save();
+
+  // Populate user details for response
+  await updatedComment.populate("user", "name email designation");
+
+  res.status(200).json({
+    success: true,
+    message: "Comment updated successfully",
+    comment: updatedComment,
+  });
+});
+
+// @desc    Delete a comment
+// @route   DELETE /api/comments/:id
+// @access  Private (Only comment author or admin)
+const deleteComment = asyncHandler(async (req, res) => {
+  const comment = await Comment.findById(req.params.id);
+
+  if (!comment) {
+    res.status(404);
+    throw new Error("Comment not found");
+  }
+
+  // Check if user is the comment author or admin
+  const isAdmin = req.admin; // Admin requests have req.admin set by adminAuth middleware
+  const isAuthor = req.user && comment.user.toString() === req.user._id.toString();
+
+  if (!isAdmin && !isAuthor) {
+    res.status(403);
+    throw new Error("Not authorized to delete this comment");
+  }
+
+  await Comment.findByIdAndDelete(req.params.id);
+
+  res.status(200).json({
+    success: true,
+    message: "Comment deleted successfully",
+  });
+});
+
+// @desc    Like/Unlike a comment
+// @route   PUT /api/comments/:id/like
+// @access  Private
+const toggleCommentLike = asyncHandler(async (req, res) => {
+  const comment = await Comment.findById(req.params.id);
+
+  if (!comment) {
+    res.status(404);
+    throw new Error("Comment not found");
+  }
+
+  const userId = req.user._id.toString();
+  const existingLikeIndex = comment.likes.findIndex(
+    (like) => like.user.toString() === userId
+  );
+
+  if (existingLikeIndex > -1) {
+    // Unlike the comment
+    comment.likes.splice(existingLikeIndex, 1);
+  } else {
+    // Like the comment
+    comment.likes.push({
+      user: req.user._id,
+      likedAt: new Date(),
+    });
+  }
+
+  await comment.save();
+
+  res.status(200).json({
+    success: true,
+    message: existingLikeIndex > -1 ? "Comment unliked" : "Comment liked",
+    likesCount: comment.likes.length,
+    isLiked: existingLikeIndex === -1,
+  });
+});
+
+// @desc    Add a reply to a comment
+// @route   POST /api/comments/:id/reply
+// @access  Private
+const addReply = asyncHandler(async (req, res) => {
+  const { content } = req.body;
+
+  if (!content) {
+    res.status(400);
+    throw new Error("Please provide reply content");
+  }
+
+  const comment = await Comment.findById(req.params.id);
+
+  if (!comment) {
+    res.status(404);
+    throw new Error("Comment not found");
+  }
+
+  // Add reply
+  const reply = {
+    user: req.user._id,
+    content: content.trim(),
+    createdAt: new Date(),
+  };
+
+  comment.replies.push(reply);
+  await comment.save();
+
+  // Populate the new reply with user details
+  const populatedComment = await Comment.findById(req.params.id)
+    .populate("user", "name email designation")
+    .populate("replies.user", "name email designation");
+
+  const newReply = populatedComment.replies[populatedComment.replies.length - 1];
+
+  res.status(201).json({
+    success: true,
+    message: "Reply added successfully",
+    reply: newReply,
+  });
+});
+
+// @desc    Update a reply
+// @route   PUT /api/comments/:commentId/replies/:replyId
+// @access  Private (Only reply author)
+const updateReply = asyncHandler(async (req, res) => {
+  const { commentId, replyId } = req.params;
+  const { content } = req.body;
+
+  if (!content) {
+    res.status(400);
+    throw new Error("Please provide reply content");
+  }
+
+  const comment = await Comment.findById(commentId);
+
+  if (!comment) {
+    res.status(404);
+    throw new Error("Comment not found");
+  }
+
+  const reply = comment.replies.id(replyId);
+
+  if (!reply) {
+    res.status(404);
+    throw new Error("Reply not found");
+  }
+
+  // Check if user is the reply author
+  if (!req.user || reply.user.toString() !== req.user._id.toString()) {
+    res.status(403);
+    throw new Error("Not authorized to update this reply");
+  }
+
+  // Update reply
+  reply.content = content.trim();
+  reply.isEdited = true;
+  reply.editedAt = new Date();
+
+  await comment.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Reply updated successfully",
+    reply,
+  });
+});
+
+// @desc    Delete a reply
+// @route   DELETE /api/comments/:commentId/replies/:replyId
+// @access  Private (Only reply author or admin)
+const deleteReply = asyncHandler(async (req, res) => {
+  const { commentId, replyId } = req.params;
+
+  const comment = await Comment.findById(commentId);
+
+  if (!comment) {
+    res.status(404);
+    throw new Error("Comment not found");
+  }
+
+  const reply = comment.replies.id(replyId);
+
+  if (!reply) {
+    res.status(404);
+    throw new Error("Reply not found");
+  }
+
+  // Check if user is the reply author or admin
+  const isAdmin = req.admin; // Admin requests have req.admin set by adminAuth middleware
+  const isAuthor = req.user && reply.user.toString() === req.user._id.toString();
+
+  if (!isAdmin && !isAuthor) {
+    res.status(403);
+    throw new Error("Not authorized to delete this reply");
+  }
+
+  reply.remove();
+  await comment.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Reply deleted successfully",
+  });
+});
+
+export {
+  createComment,
+  getCommentsByPetition,
+  updateComment,
+  deleteComment,
+  toggleCommentLike,
+  addReply,
+  updateReply,
+  deleteReply,
+};
