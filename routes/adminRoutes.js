@@ -6,6 +6,7 @@ import {
   getUsers,
   getUnapprovedPetitions,
   approvePetition,
+  getAdminStats,
 } from "../controllers/adminController.js";
 import { adminAuth } from "../middleware/adminAuth.js";
 import {
@@ -31,6 +32,9 @@ router.post("/login", adminLogin);
 
 // Protected route
 router.get("/me", adminAuth, getCurrentAdmin);
+
+// Get admin dashboard stats
+router.get("/stats", adminAuth, getAdminStats);
 
 // ✅ Logout route should NOT use adminAuth middleware
 router.post("/logout", adminLogout);

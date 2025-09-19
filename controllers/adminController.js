@@ -32,8 +32,8 @@ export const adminLogin = (req, res) => {
     res.cookie("adminToken", token, {
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000,
-      secure: false, // ✅ Set to false for localhost development
-      sameSite: "lax", // ✅ Changed to lax for localhost
+      secure: process.env.NODE_ENV === "production", // true in production, false in development
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // "none" for cross-origin in production
     });
 
     return res.status(200).json({ message: "Admin logged in successfully" });
@@ -64,8 +64,8 @@ export const adminLogout = (req, res) => {
   res.cookie("adminToken", "", {
     httpOnly: true,
     expires: new Date(0),
-    secure: false, // ✅ Same as above
-    sameSite: "lax", // ✅ Same as above
+    secure: process.env.NODE_ENV === "production", // true in production, false in development
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // "none" for cross-origin in production
   });
 
   return res.status(200).json({ message: "Admin logged out successfully" });
@@ -144,5 +144,68 @@ export const approvePetition = async (req, res) => {
   } catch (error) {
     console.error("Error approving petition:", error);
     res.status(500).json({ message: "Error approving petition" });
+  }
+};
+
+// Get admin dashboard statistics
+export const getAdminStats = async (req, res) => {
+  try {
+    // Get total counts
+    const totalPetitions = await Petition.countDocuments();
+    const totalUsers = await User.countDocuments();
+
+    // Calculate total signatures from all petitions
+    const petitionSignatures = await Petition.aggregate([
+      { $group: { _id: null, totalSignatures: { $sum: "$signaturesCount" } } },
+    ]);
+    const totalSignatures = petitionSignatures[0]?.totalSignatures || 0;
+
+    // Get active (approved) petitions count
+    const activePetitions = await Petition.countDocuments({ approved: true });
+
+    // For now, we'll consider "successful petitions" as those with high signature counts
+    // You might want to add a "successful" field to your petition model later
+    const successfulPetitions = await Petition.countDocuments({
+      approved: true,
+      signaturesCount: { $gte: 1000 }, // Petitions with 1000+ signatures
+    });
+
+    // Calculate signatures breakdown
+    const activeSignaturesResult = await Petition.aggregate([
+      { $match: { approved: true } },
+      { $group: { _id: null, totalSignatures: { $sum: "$signaturesCount" } } },
+    ]);
+    const activeSignatures = activeSignaturesResult[0]?.totalSignatures || 0;
+
+    const successfulSignaturesResult = await Petition.aggregate([
+      { $match: { approved: true, signaturesCount: { $gte: 1000 } } },
+      { $group: { _id: null, totalSignatures: { $sum: "$signaturesCount" } } },
+    ]);
+    const successfulSignatures =
+      successfulSignaturesResult[0]?.totalSignatures || 0;
+
+    const stats = {
+      totalPetitions,
+      totalSignatures,
+      totalUsers,
+      victories: successfulPetitions, // Same as successful petitions for now
+      breakdown: {
+        activePetitions,
+        successfulPetitions,
+        activeSignatures,
+        successfulSignatures,
+      },
+    };
+
+    res.status(200).json({
+      success: true,
+      stats,
+    });
+  } catch (error) {
+    console.error("Error fetching admin stats:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching statistics",
+    });
   }
 };
