@@ -9,7 +9,7 @@ import { sendPetitionNotificationEmails } from "../config/emailConfig.js";
 // @route   POST /api/petitions
 // @access  Private
 const createPetition = asyncHandler(async (req, res) => {
-  const { title, decisionMakers, country, petitionDetails, petitionStarter } =
+  const { title, decisionMakers, country, petitionDetails, petitionStarter, categories } =
     req.body;
 
   // Parse decisionMakers if it's a string (from FormData)
@@ -42,6 +42,17 @@ const createPetition = asyncHandler(async (req, res) => {
     } catch (error) {
       res.status(400);
       throw new Error("Invalid petition starter data format");
+    }
+  }
+
+  // Parse categories if it's a string (from FormData)
+  let parsedCategories = categories || [];
+  if (typeof categories === "string") {
+    try {
+      parsedCategories = JSON.parse(categories);
+    } catch (error) {
+      res.status(400);
+      throw new Error("Invalid categories data format");
     }
   }
 
@@ -105,6 +116,7 @@ const createPetition = asyncHandler(async (req, res) => {
     title,
     decisionMakers: parsedDecisionMakers || [],
     country,
+    categories: parsedCategories,
     petitionDetails: {
       ...parsedPetitionDetails,
       image: imageUrl,
@@ -178,6 +190,7 @@ const createPetition = asyncHandler(async (req, res) => {
         title: petition.title,
         decisionMakers: petition.decisionMakers,
         country: petition.country,
+        categories: petition.categories,
         petitionDetails: petition.petitionDetails,
         petitionStarter: petition.petitionStarter,
         numberOfSignatures: petition.numberOfSignatures,

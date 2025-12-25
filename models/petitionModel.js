@@ -18,6 +18,23 @@ const petitionSchema = mongoose.Schema(
       type: String,
       required: true,
     },
+    categories: [{
+      type: String,
+      enum: [
+        'animals',
+        'game',
+        'interior',
+        'lifestyle',
+        'sports',
+        'technology',
+        'travel',
+        'environment',
+        'education',
+        'health',
+        'politics',
+        'human_rights'
+      ]
+    }],
     petitionDetails: {
       problem: { type: String, required: true },
       solution: { type: String, required: true },
