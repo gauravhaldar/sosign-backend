@@ -8,6 +8,7 @@ import {
   addReply,
   updateReply,
   deleteReply,
+  getUserRecentComments,
 } from "../controllers/commentController.js";
 import { protect } from "../middleware/authMiddleware.js";
 
@@ -15,6 +16,7 @@ const router = express.Router();
 
 // Comment routes
 router.route("/").post(protect, createComment);
+router.route("/user/recent").get(protect, getUserRecentComments);
 router.route("/petition/:petitionId").get(getCommentsByPetition);
 router
   .route("/:id")

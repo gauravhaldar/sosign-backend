@@ -308,6 +308,33 @@ const deleteReply = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Get recent comments by logged-in user
+// @route   GET /api/comments/user/recent
+// @access  Private
+const getUserRecentComments = asyncHandler(async (req, res) => {
+  const limit = parseInt(req.query.limit) || 4;
+
+  // Get user's recent comments
+  const comments = await Comment.find({ user: req.user._id })
+    .populate("petition", "title _id")
+    .sort({ createdAt: -1 })
+    .limit(limit);
+
+  // Format the response to include petition info
+  const formattedComments = comments.map((comment) => ({
+    _id: comment._id,
+    content: comment.content,
+    createdAt: comment.createdAt,
+    petitionId: comment.petition?._id,
+    petitionTitle: comment.petition?.title,
+  }));
+
+  res.status(200).json({
+    success: true,
+    comments: formattedComments,
+  });
+});
+
 export {
   createComment,
   getCommentsByPetition,
@@ -317,4 +344,5 @@ export {
   addReply,
   updateReply,
   deleteReply,
+  getUserRecentComments,
 };

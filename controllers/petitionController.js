@@ -212,13 +212,20 @@ const getPetitions = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
 
-  const { country, search } = req.query;
+  const { country, search, category } = req.query;
 
   // Build query object
   let query = {};
 
   if (country) {
     query.country = country;
+  }
+
+  if (category) {
+    // Categories is an array field with lowercase values (education, human_rights, etc.)
+    // Convert the category to lowercase and use $in to match
+    const categoryLower = category.toLowerCase().replace(/\s+/g, '_');
+    query.categories = { $in: [categoryLower] };
   }
 
   if (search) {
