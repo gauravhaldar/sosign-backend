@@ -39,6 +39,15 @@ const userSchema = mongoose.Schema(
       unique: true, // Google ID should be unique
       sparse: true, // Allows null values to not violate unique constraint
     },
+    bio: {
+      type: String,
+      maxlength: 500,
+      default: "",
+    },
+    profilePicture: {
+      type: String, // URL to the profile picture (Cloudinary)
+      default: "",
+    },
     petitions: [
       {
         type: mongoose.Schema.Types.ObjectId,

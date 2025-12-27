@@ -25,6 +25,8 @@ const authUser = asyncHandler(async (req, res) => {
       uniqueCode: userWithPetitions.uniqueCode,
       designation: userWithPetitions.designation,
       mobileNumber: userWithPetitions.mobileNumber,
+      bio: userWithPetitions.bio || "",
+      profilePicture: userWithPetitions.profilePicture || "",
       petitions: userWithPetitions.petitions, // Include petitions data
       token: token, // Include token in response
     });
@@ -65,6 +67,8 @@ const registerUser = asyncHandler(async (req, res) => {
       designation: user.designation,
       email: user.email,
       mobileNumber: user.mobileNumber,
+      bio: user.bio || "",
+      profilePicture: user.profilePicture || "",
       token: token, // Include token in response
     });
   } else {
@@ -110,12 +114,53 @@ const getUserProfile = asyncHandler(async (req, res) => {
       designation: userWithPetitions.designation,
       email: userWithPetitions.email,
       mobileNumber: userWithPetitions.mobileNumber,
+      bio: userWithPetitions.bio || "",
+      profilePicture: userWithPetitions.profilePicture || "",
       petitions: userWithPetitions.petitions,
     });
   } else {
     res.status(404);
     throw new Error("User not found");
   }
+});
+
+// @desc    Update user profile
+// @route   PUT /api/users/profile
+// @access  Private
+const updateUserProfile = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id);
+
+  if (!user) {
+    res.status(404);
+    throw new Error("User not found");
+  }
+
+  // Update fields if provided
+  const { name, bio, designation, mobileNumber } = req.body;
+
+  if (name !== undefined) user.name = name;
+  if (bio !== undefined) user.bio = bio;
+  if (designation !== undefined) user.designation = designation;
+  if (mobileNumber !== undefined) user.mobileNumber = mobileNumber;
+
+  // Handle profile picture upload
+  if (req.file) {
+    user.profilePicture = req.file.path; // Cloudinary URL
+  }
+
+  const updatedUser = await user.save();
+
+  res.status(200).json({
+    _id: updatedUser._id,
+    name: updatedUser.name,
+    uniqueCode: updatedUser.uniqueCode,
+    designation: updatedUser.designation,
+    email: updatedUser.email,
+    mobileNumber: updatedUser.mobileNumber,
+    bio: updatedUser.bio || "",
+    profilePicture: updatedUser.profilePicture || "",
+    message: "Profile updated successfully",
+  });
 });
 
 // @desc    Auth user with Google
@@ -136,7 +181,9 @@ const authGoogleUser = asyncHandler(async (req, res) => {
       uniqueCode: user.uniqueCode,
       designation: user.designation, // May not be available for Google sign-ups
       mobileNumber: user.mobileNumber, // May not be available for Google sign-ups
-      photoURL: user.photoURL || photoURL, // Update photoURL if available
+      photoURL: user.profilePicture || user.photoURL || photoURL, // Use profilePicture if available
+      bio: user.bio || "",
+      profilePicture: user.profilePicture || "",
       petitions: user.petitions, // Include petitions data
       token: token, // Include token in response
     });
@@ -161,6 +208,8 @@ const authGoogleUser = asyncHandler(async (req, res) => {
         uniqueCode: user.uniqueCode,
         designation: user.designation,
         mobileNumber: user.mobileNumber,
+        bio: user.bio || "",
+        profilePicture: user.profilePicture || "",
         petitions: user.petitions, // Include petitions data
         token: token, // Include token in response
       });
@@ -171,7 +220,7 @@ const authGoogleUser = asyncHandler(async (req, res) => {
   }
 });
 
-export { authUser, registerUser, logoutUser, getUserProfile, authGoogleUser };
+export { authUser, registerUser, logoutUser, getUserProfile, updateUserProfile, authGoogleUser };
 // @desc    Get public user info by unique code
 // @route   GET /api/users/code/:code
 // @access  Public
