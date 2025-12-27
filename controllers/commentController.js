@@ -335,6 +335,63 @@ const getUserRecentComments = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Get all unapproved comments (Admin only)
+// @route   GET /api/admin/comments/unapproved
+// @access  Admin
+const getUnapprovedComments = asyncHandler(async (req, res) => {
+  const comments = await Comment.find({ isApproved: false })
+    .populate("user", "name email designation")
+    .populate("petition", "title _id")
+    .sort({ createdAt: -1 });
+
+  res.status(200).json({
+    success: true,
+    comments,
+  });
+});
+
+// @desc    Approve a comment (Admin only)
+// @route   PUT /api/admin/comments/:id/approve
+// @access  Admin
+const approveComment = asyncHandler(async (req, res) => {
+  const comment = await Comment.findById(req.params.id);
+
+  if (!comment) {
+    res.status(404);
+    throw new Error("Comment not found");
+  }
+
+  comment.isApproved = true;
+  comment.approvedAt = new Date();
+  comment.approvedBy = req.admin?.username || "admin";
+
+  await comment.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Comment approved successfully",
+  });
+});
+
+// @desc    Reject/Delete a comment (Admin only)
+// @route   DELETE /api/admin/comments/:id/reject
+// @access  Admin
+const rejectComment = asyncHandler(async (req, res) => {
+  const comment = await Comment.findById(req.params.id);
+
+  if (!comment) {
+    res.status(404);
+    throw new Error("Comment not found");
+  }
+
+  await Comment.findByIdAndDelete(req.params.id);
+
+  res.status(200).json({
+    success: true,
+    message: "Comment rejected and deleted successfully",
+  });
+});
+
 export {
   createComment,
   getCommentsByPetition,
@@ -345,4 +402,7 @@ export {
   updateReply,
   deleteReply,
   getUserRecentComments,
+  getUnapprovedComments,
+  approveComment,
+  rejectComment,
 };

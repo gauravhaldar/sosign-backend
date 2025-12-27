@@ -63,6 +63,16 @@ const commentSchema = mongoose.Schema(
         },
       },
     ],
+    isApproved: {
+      type: Boolean,
+      default: false,
+    },
+    approvedAt: {
+      type: Date,
+    },
+    approvedBy: {
+      type: String, // Admin username or ID
+    },
   },
   {
     timestamps: true,

@@ -9,8 +9,12 @@ import {
   updateReply,
   deleteReply,
   getUserRecentComments,
+  getUnapprovedComments,
+  approveComment,
+  rejectComment,
 } from "../controllers/commentController.js";
 import { protect } from "../middleware/authMiddleware.js";
+import { adminAuth } from "../middleware/adminAuth.js";
 
 const router = express.Router();
 
@@ -30,5 +34,10 @@ router
   .route("/:commentId/replies/:replyId")
   .put(protect, updateReply)
   .delete(protect, deleteReply);
+
+// Admin routes for comment approval
+router.route("/admin/unapproved").get(adminAuth, getUnapprovedComments);
+router.route("/admin/:id/approve").put(adminAuth, approveComment);
+router.route("/admin/:id/reject").delete(adminAuth, rejectComment);
 
 export default router;
