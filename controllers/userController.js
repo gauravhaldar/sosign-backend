@@ -27,6 +27,7 @@ const authUser = asyncHandler(async (req, res) => {
       mobileNumber: userWithPetitions.mobileNumber,
       bio: userWithPetitions.bio || "",
       profilePicture: userWithPetitions.profilePicture || "",
+      socialLinks: userWithPetitions.socialLinks || {},
       petitions: userWithPetitions.petitions, // Include petitions data
       token: token, // Include token in response
     });
@@ -69,6 +70,7 @@ const registerUser = asyncHandler(async (req, res) => {
       mobileNumber: user.mobileNumber,
       bio: user.bio || "",
       profilePicture: user.profilePicture || "",
+      socialLinks: user.socialLinks || {},
       token: token, // Include token in response
     });
   } else {
@@ -116,6 +118,7 @@ const getUserProfile = asyncHandler(async (req, res) => {
       mobileNumber: userWithPetitions.mobileNumber,
       bio: userWithPetitions.bio || "",
       profilePicture: userWithPetitions.profilePicture || "",
+      socialLinks: userWithPetitions.socialLinks || {},
       petitions: userWithPetitions.petitions,
     });
   } else {
@@ -137,11 +140,30 @@ const updateUserProfile = asyncHandler(async (req, res) => {
 
   // Update fields if provided
   const { name, bio, designation, mobileNumber } = req.body;
+  let { socialLinks } = req.body;
 
   if (name !== undefined) user.name = name;
   if (bio !== undefined) user.bio = bio;
   if (designation !== undefined) user.designation = designation;
   if (mobileNumber !== undefined) user.mobileNumber = mobileNumber;
+
+  // Handle social links update (parse from JSON string if needed - FormData sends as string)
+  if (socialLinks !== undefined) {
+    if (typeof socialLinks === 'string') {
+      try {
+        socialLinks = JSON.parse(socialLinks);
+      } catch (e) {
+        socialLinks = {};
+      }
+    }
+    user.socialLinks = {
+      facebook: socialLinks.facebook || user.socialLinks?.facebook || "",
+      twitter: socialLinks.twitter || user.socialLinks?.twitter || "",
+      linkedin: socialLinks.linkedin || user.socialLinks?.linkedin || "",
+      instagram: socialLinks.instagram || user.socialLinks?.instagram || "",
+      youtube: socialLinks.youtube || user.socialLinks?.youtube || "",
+    };
+  }
 
   // Handle profile picture upload
   if (req.file) {
@@ -159,6 +181,7 @@ const updateUserProfile = asyncHandler(async (req, res) => {
     mobileNumber: updatedUser.mobileNumber,
     bio: updatedUser.bio || "",
     profilePicture: updatedUser.profilePicture || "",
+    socialLinks: updatedUser.socialLinks || {},
     message: "Profile updated successfully",
   });
 });
@@ -184,6 +207,7 @@ const authGoogleUser = asyncHandler(async (req, res) => {
       photoURL: user.profilePicture || user.photoURL || photoURL, // Use profilePicture if available
       bio: user.bio || "",
       profilePicture: user.profilePicture || "",
+      socialLinks: user.socialLinks || {},
       petitions: user.petitions, // Include petitions data
       token: token, // Include token in response
     });
@@ -210,6 +234,7 @@ const authGoogleUser = asyncHandler(async (req, res) => {
         mobileNumber: user.mobileNumber,
         bio: user.bio || "",
         profilePicture: user.profilePicture || "",
+        socialLinks: user.socialLinks || {},
         petitions: user.petitions, // Include petitions data
         token: token, // Include token in response
       });
