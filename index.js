@@ -17,6 +17,7 @@ import adminRoutes from "./routes/adminRoutes.js";
 import commentRoutes from "./routes/commentRoutes.js";
 import successfulPetitionRoutes from "./routes/successfulPetitionRoutes.js";
 import adsRoutes from "./routes/adsRoutes.js";
+import downloadRequestRoutes from "./routes/downloadRequestRoutes.js";
 
 // Middleware
 import { notFound, errorHandler } from "./middleware/errorMiddleware.js";
@@ -108,6 +109,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/comments", commentRoutes);
 app.use("/api/successful-petitions", successfulPetitionRoutes);
 app.use("/api/ads", adsRoutes);
+app.use("/api/download-requests", downloadRequestRoutes);
 
 // Root endpoint
 app.get("/", (req, res) => {
@@ -121,6 +123,7 @@ app.get("/", (req, res) => {
             comments: "/api/comments",
             successfulPetitions: "/api/successful-petitions",
             ads: "/api/ads",
+            downloadRequests: "/api/download-requests",
             health: "/health",
         },
     });
