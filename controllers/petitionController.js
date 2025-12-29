@@ -240,7 +240,7 @@ const getPetitions = asyncHandler(async (req, res) => {
   query.approved = true;
 
   const petitions = await Petition.find(query)
-    .populate("petitionStarter.user", "name email designation")
+    .populate("petitionStarter.user", "name email designation profilePicture")
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit);
@@ -284,7 +284,7 @@ const getAllPetitionsForAdmin = asyncHandler(async (req, res) => {
 
   // Admin sees ALL petitions (approved and unapproved)
   const petitions = await Petition.find(query)
-    .populate("petitionStarter.user", "name email designation")
+    .populate("petitionStarter.user", "name email designation profilePicture")
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit);
@@ -306,7 +306,7 @@ const getAllPetitionsForAdmin = asyncHandler(async (req, res) => {
 // @access  Public
 const getPetitionById = asyncHandler(async (req, res) => {
   const petition = await Petition.findById(req.params.id)
-    .populate("petitionStarter.user", "name email designation uniqueCode")
+    .populate("petitionStarter.user", "name email designation uniqueCode profilePicture")
     .populate("signatures.user", "name email uniqueCode")
     .populate("signatures.referral.owner", "name email uniqueCode");
 
@@ -401,7 +401,7 @@ const getUserPetitions = asyncHandler(async (req, res) => {
   const petitions = await Petition.find({
     "petitionStarter.user": req.user._id,
   })
-    .populate("petitionStarter.user", "name email")
+    .populate("petitionStarter.user", "name email profilePicture")
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit);
@@ -549,7 +549,7 @@ const getPetitionsByCountry = asyncHandler(async (req, res) => {
     country: req.params.country,
     approved: true,
   })
-    .populate("petitionStarter.user", "name email")
+    .populate("petitionStarter.user", "name email profilePicture")
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit);
@@ -577,7 +577,7 @@ const getPopularPetitions = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
 
   const petitions = await Petition.find({ approved: true })
-    .populate("petitionStarter.user", "name email")
+    .populate("petitionStarter.user", "name email profilePicture")
     .sort({ numberOfSignatures: -1 })
     .limit(limit);
 
