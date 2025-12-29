@@ -9,6 +9,7 @@ import {
   updateReply,
   deleteReply,
   getUserRecentComments,
+  getUserCommentsPaginated,
   getUnapprovedComments,
   approveComment,
   rejectComment,
@@ -21,6 +22,7 @@ const router = express.Router();
 // Comment routes
 router.route("/").post(protect, createComment);
 router.route("/user/recent").get(protect, getUserRecentComments);
+router.route("/user/all").get(protect, getUserCommentsPaginated);
 router.route("/petition/:petitionId").get(getCommentsByPetition);
 router
   .route("/:id")

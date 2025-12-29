@@ -339,6 +339,50 @@ const getUserRecentComments = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Get all comments by logged-in user with pagination
+// @route   GET /api/comments/user/all
+// @access  Private
+const getUserCommentsPaginated = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const skip = (page - 1) * limit;
+
+  // Get user's APPROVED comments only with pagination
+  const comments = await Comment.find({
+    user: req.user._id,
+    isApproved: true,
+  })
+    .populate("petition", "title _id")
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+
+  const totalComments = await Comment.countDocuments({
+    user: req.user._id,
+    isApproved: true,
+  });
+
+  // Format the response to include petition info
+  const formattedComments = comments.map((comment) => ({
+    _id: comment._id,
+    content: comment.content,
+    createdAt: comment.createdAt,
+    petitionId: comment.petition?._id,
+    petitionTitle: comment.petition?.title,
+    isApproved: comment.isApproved,
+  }));
+
+  res.status(200).json({
+    success: true,
+    comments: formattedComments,
+    currentPage: page,
+    totalPages: Math.ceil(totalComments / limit),
+    totalComments,
+    hasNextPage: page < Math.ceil(totalComments / limit),
+    hasPrevPage: page > 1,
+  });
+});
+
 // @desc    Get all unapproved comments (Admin only)
 // @route   GET /api/admin/comments/unapproved
 // @access  Admin
@@ -406,6 +450,7 @@ export {
   updateReply,
   deleteReply,
   getUserRecentComments,
+  getUserCommentsPaginated,
   getUnapprovedComments,
   approveComment,
   rejectComment,
