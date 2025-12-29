@@ -314,8 +314,11 @@ const deleteReply = asyncHandler(async (req, res) => {
 const getUserRecentComments = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit) || 4;
 
-  // Get user's recent comments
-  const comments = await Comment.find({ user: req.user._id })
+  // Get user's recent APPROVED comments only
+  const comments = await Comment.find({
+    user: req.user._id,
+    isApproved: true  // Only show approved comments
+  })
     .populate("petition", "title _id")
     .sort({ createdAt: -1 })
     .limit(limit);
@@ -327,6 +330,7 @@ const getUserRecentComments = asyncHandler(async (req, res) => {
     createdAt: comment.createdAt,
     petitionId: comment.petition?._id,
     petitionTitle: comment.petition?.title,
+    isApproved: comment.isApproved,
   }));
 
   res.status(200).json({
