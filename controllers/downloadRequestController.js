@@ -1,5 +1,5 @@
 import asyncHandler from "express-async-handler";
-import DownloadRequest from "../models/downloadRequestModel.js";
+import DownloadRequest, { AVAILABLE_FIELDS } from "../models/downloadRequestModel.js";
 import Petition from "../models/petitionModel.js";
 import Comment from "../models/commentModel.js";
 
@@ -7,7 +7,7 @@ import Comment from "../models/commentModel.js";
 // @route   POST /api/download-requests
 // @access  Private
 const createDownloadRequest = asyncHandler(async (req, res) => {
-    const { petitionId, reason } = req.body;
+    const { petitionId, reason, requestedFields } = req.body;
 
     if (!petitionId || !reason) {
         res.status(400);
@@ -17,6 +17,16 @@ const createDownloadRequest = asyncHandler(async (req, res) => {
     if (reason.length > 500) {
         res.status(400);
         throw new Error("Reason cannot exceed 500 characters");
+    }
+
+    // Validate and filter requestedFields
+    let validatedFields = AVAILABLE_FIELDS; // Default to all fields
+    if (requestedFields && Array.isArray(requestedFields) && requestedFields.length > 0) {
+        validatedFields = requestedFields.filter(field => AVAILABLE_FIELDS.includes(field));
+        if (validatedFields.length === 0) {
+            res.status(400);
+            throw new Error("Please select at least one valid data field to request");
+        }
     }
 
     // Check if petition exists
@@ -43,12 +53,14 @@ const createDownloadRequest = asyncHandler(async (req, res) => {
         petition: petitionId,
         user: req.user._id,
         reason: reason.trim(),
+        requestedFields: validatedFields,
     });
 
     res.status(201).json({
         success: true,
         message: "Download request submitted successfully. Please wait for admin approval.",
         request: downloadRequest,
+        availableFields: AVAILABLE_FIELDS, // Send available fields for reference
     });
 });
 
@@ -83,6 +95,7 @@ const checkDownloadRequestStatus = asyncHandler(async (req, res) => {
             hasRequest: false,
             canRequest: true,
             canDownload: false,
+            availableFields: AVAILABLE_FIELDS,
         });
     }
 
@@ -92,6 +105,9 @@ const checkDownloadRequestStatus = asyncHandler(async (req, res) => {
         status: request.status,
         canRequest: request.status === "rejected", // Can request again if rejected
         canDownload: request.status === "approved",
+        requestedFields: request.requestedFields,
+        approvedFields: request.approvedFields,
+        availableFields: AVAILABLE_FIELDS,
         request,
     });
 });
@@ -114,6 +130,11 @@ const downloadPetitionData = asyncHandler(async (req, res) => {
         throw new Error("You do not have permission to download this petition data. Please request access first.");
     }
 
+    // Get approved fields - default to all if empty (for backward compatibility)
+    const approvedFields = request.approvedFields && request.approvedFields.length > 0
+        ? request.approvedFields
+        : AVAILABLE_FIELDS;
+
     // Fetch petition with all related data
     const petition = await Petition.findById(petitionId)
         .populate("petitionStarter.user", "name email designation")
@@ -124,13 +145,16 @@ const downloadPetitionData = asyncHandler(async (req, res) => {
         throw new Error("Petition not found");
     }
 
-    // Fetch all approved comments for this petition
-    const comments = await Comment.find({
-        petition: petitionId,
-        isApproved: true,
-    })
-        .populate("user", "name email designation")
-        .sort({ createdAt: -1 });
+    // Fetch all approved comments for this petition (only if comments are approved)
+    let comments = [];
+    if (approvedFields.includes("comments")) {
+        comments = await Comment.find({
+            petition: petitionId,
+            isApproved: true,
+        })
+            .populate("user", "name email designation")
+            .sort({ createdAt: -1 });
+    }
 
     // Update download count and track download
     request.downloadCount += 1;
@@ -190,51 +214,57 @@ const downloadPetitionData = asyncHandler(async (req, res) => {
     doc.fontSize(18).fillColor("#1a1a2e").font("Helvetica-Bold").text(petition.title, { align: "center" });
     doc.moveDown(1);
 
-    // ===== PETITION DETAILS =====
-    addSectionHeader("PETITION DETAILS");
-    addLabelValue("Petition ID", petition._id.toString());
-    addLabelValue("Country", petition.country);
-    addLabelValue("Categories", petition.categories?.join(", ") || "N/A");
-    addLabelValue("Status", petition.approved ? "Approved" : "Pending Approval");
-    addLabelValue("Created At", new Date(petition.createdAt).toLocaleDateString());
-    addLabelValue("Last Updated", new Date(petition.updatedAt).toLocaleDateString());
+    // ===== PETITION DETAILS ===== (if approved)
+    if (approvedFields.includes("petitionDetails")) {
+        addSectionHeader("PETITION DETAILS");
+        addLabelValue("Petition ID", petition._id.toString());
+        addLabelValue("Country", petition.country);
+        addLabelValue("Categories", petition.categories?.join(", ") || "N/A");
+        addLabelValue("Status", petition.approved ? "Approved" : "Pending Approval");
+        addLabelValue("Created At", new Date(petition.createdAt).toLocaleDateString());
+        addLabelValue("Last Updated", new Date(petition.updatedAt).toLocaleDateString());
 
-    // ===== PETITION STARTER =====
-    addSectionHeader("PETITION STARTER");
-    addLabelValue("Name", petition.petitionStarter?.name || petition.petitionStarter?.user?.name || "Anonymous");
-    addLabelValue("Location", petition.petitionStarter?.location || "N/A");
-    if (petition.petitionStarter?.comment) {
-        doc.moveDown(0.3);
-        doc.fontSize(10).font("Helvetica-Oblique").text(`"${petition.petitionStarter.comment}"`, { indent: 20 });
+        // Problem & Solution are part of petition details
+        if (petition.petitionDetails?.problem) {
+            addSectionHeader("PROBLEM");
+            doc.fontSize(10).font("Helvetica").text(petition.petitionDetails.problem, { align: "justify" });
+        }
+
+        if (petition.petitionDetails?.solution) {
+            addSectionHeader("SOLUTION");
+            doc.fontSize(10).font("Helvetica").text(petition.petitionDetails.solution, { align: "justify" });
+        }
     }
 
-    // ===== PROBLEM & SOLUTION =====
-    if (petition.petitionDetails?.problem) {
-        addSectionHeader("PROBLEM");
-        doc.fontSize(10).font("Helvetica").text(petition.petitionDetails.problem, { align: "justify" });
+    // ===== PETITION STARTER ===== (if approved)
+    if (approvedFields.includes("petitionStarter")) {
+        addSectionHeader("PETITION STARTER");
+        addLabelValue("Name", petition.petitionStarter?.name || petition.petitionStarter?.user?.name || "Anonymous");
+        addLabelValue("Location", petition.petitionStarter?.location || "N/A");
+        if (petition.petitionStarter?.comment) {
+            doc.moveDown(0.3);
+            doc.fontSize(10).font("Helvetica-Oblique").text(`"${petition.petitionStarter.comment}"`, { indent: 20 });
+        }
     }
 
-    if (petition.petitionDetails?.solution) {
-        addSectionHeader("SOLUTION");
-        doc.fontSize(10).font("Helvetica").text(petition.petitionDetails.solution, { align: "justify" });
-    }
-
-    // ===== DECISION MAKERS =====
-    if (petition.decisionMakers && petition.decisionMakers.length > 0) {
+    // ===== DECISION MAKERS ===== (if approved)
+    if (approvedFields.includes("decisionMakers") && petition.decisionMakers && petition.decisionMakers.length > 0) {
         addSectionHeader("DECISION MAKERS");
         petition.decisionMakers.forEach((dm, index) => {
             doc.fontSize(10).font("Helvetica").text(`${index + 1}. ${dm.name}${dm.organization ? ` (${dm.organization})` : ""}${dm.email ? ` - ${dm.email}` : ""}`);
         });
     }
 
-    // ===== STATISTICS =====
-    addSectionHeader("STATISTICS");
-    const totalSignatures = petition.numberOfSignatures || petition.signatures?.length || 0;
-    doc.fontSize(12).font("Helvetica-Bold").fillColor("#F43676").text(`Total Signatures: ${totalSignatures}`);
-    doc.fillColor("#333333").fontSize(10).font("Helvetica").text(`Total Comments: ${comments.length}`);
+    // ===== STATISTICS ===== (if approved)
+    if (approvedFields.includes("statistics")) {
+        addSectionHeader("STATISTICS");
+        const totalSignatures = petition.numberOfSignatures || petition.signatures?.length || 0;
+        doc.fontSize(12).font("Helvetica-Bold").fillColor("#F43676").text(`Total Signatures: ${totalSignatures}`);
+        doc.fillColor("#333333").fontSize(10).font("Helvetica").text(`Total Comments: ${comments.length}`);
+    }
 
-    // ===== SIGNATURES LIST =====
-    if (petition.signatures && petition.signatures.length > 0) {
+    // ===== SIGNATURES LIST ===== (if approved)
+    if (approvedFields.includes("signatures") && petition.signatures && petition.signatures.length > 0) {
         // Only add new page if not enough space (less than 200px remaining)
         if (doc.y > 650) {
             doc.addPage();
@@ -276,8 +306,8 @@ const downloadPetitionData = asyncHandler(async (req, res) => {
         }
     }
 
-    // ===== COMMENTS =====
-    if (comments.length > 0) {
+    // ===== COMMENTS ===== (if approved)
+    if (approvedFields.includes("comments") && comments.length > 0) {
         // Only add new page if not enough space (less than 200px remaining)
         if (doc.y > 650) {
             doc.addPage();
@@ -302,8 +332,15 @@ const downloadPetitionData = asyncHandler(async (req, res) => {
         }
     }
 
+    // ===== APPROVED FIELDS NOTICE =====
+    doc.moveDown(1.5);
+    doc.fontSize(8).fillColor("#666666").font("Helvetica-Oblique").text(
+        `Approved data fields: ${approvedFields.join(", ")}`,
+        { align: "center" }
+    );
+
     // ===== FOOTER =====
-    doc.moveDown(2);
+    doc.moveDown(1);
     doc.fontSize(8).fillColor("#999999").font("Helvetica").text(
         `This document was exported from SOSIGN by ${req.user.name} (${req.user.email}) on ${new Date().toISOString()}`,
         { align: "center" }
@@ -363,7 +400,7 @@ const getPendingRequestsCount = asyncHandler(async (req, res) => {
 // @route   PUT /api/download-requests/admin/:id/approve
 // @access  Admin
 const approveDownloadRequest = asyncHandler(async (req, res) => {
-    const { adminNote } = req.body;
+    const { adminNote, approvedFields } = req.body;
 
     const request = await DownloadRequest.findById(req.params.id);
 
@@ -377,9 +414,27 @@ const approveDownloadRequest = asyncHandler(async (req, res) => {
         throw new Error("This request has already been processed");
     }
 
+    // Validate and set approvedFields
+    // If no approvedFields provided, approve all requested fields
+    let validatedApprovedFields = request.requestedFields;
+
+    if (approvedFields && Array.isArray(approvedFields) && approvedFields.length > 0) {
+        // Ensure approvedFields are a subset of requestedFields
+        validatedApprovedFields = approvedFields.filter(field =>
+            request.requestedFields.includes(field) && AVAILABLE_FIELDS.includes(field)
+        );
+
+        if (validatedApprovedFields.length === 0) {
+            res.status(400);
+            throw new Error("Please approve at least one valid data field");
+        }
+    }
+
     request.status = "approved";
     request.approvedBy = req.admin?.username || "admin";
     request.approvedAt = new Date();
+    request.approvedFields = validatedApprovedFields;
+
     if (adminNote) {
         request.adminNote = adminNote.trim();
     }

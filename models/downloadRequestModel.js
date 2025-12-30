@@ -1,5 +1,15 @@
 import mongoose from "mongoose";
 
+// Available data fields that can be requested/approved
+const AVAILABLE_FIELDS = [
+    "petitionDetails",      // Title, problem, solution, country, categories
+    "petitionStarter",      // Name, location, comment
+    "decisionMakers",       // List of decision makers
+    "statistics",           // Signature count, comment count
+    "signatures",           // Full list of signatures with user info
+    "comments",             // Full list of comments with user info
+];
+
 const downloadRequestSchema = mongoose.Schema(
     {
         petition: {
@@ -16,6 +26,18 @@ const downloadRequestSchema = mongoose.Schema(
             type: String,
             required: true,
             maxlength: 500,
+        },
+        // Fields requested by the user
+        requestedFields: {
+            type: [String],
+            enum: AVAILABLE_FIELDS,
+            default: AVAILABLE_FIELDS, // Default to all fields
+        },
+        // Fields approved by the admin (subset of requestedFields)
+        approvedFields: {
+            type: [String],
+            enum: AVAILABLE_FIELDS,
+            default: [],
         },
         status: {
             type: String,
@@ -50,4 +72,5 @@ downloadRequestSchema.index({ petition: 1, user: 1, status: 1 });
 
 const DownloadRequest = mongoose.model("DownloadRequest", downloadRequestSchema);
 
+export { AVAILABLE_FIELDS };
 export default DownloadRequest;
