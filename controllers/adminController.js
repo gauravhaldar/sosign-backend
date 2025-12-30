@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import User from "../models/userModel.js";
 import Petition from "../models/petitionModel.js";
+import SuccessfulPetition from "../models/successfulPetitionModel.js";
 
 const { ADMIN_EMAIL, ADMIN_PASSWORD } = process.env;
 
@@ -156,45 +157,54 @@ export const getAdminStats = async (req, res) => {
 
     // Calculate total signatures from all petitions
     const petitionSignatures = await Petition.aggregate([
-      { $group: { _id: null, totalSignatures: { $sum: "$signaturesCount" } } },
+      { $group: { _id: null, totalSignatures: { $sum: "$numberOfSignatures" } } },
     ]);
     const totalSignatures = petitionSignatures[0]?.totalSignatures || 0;
 
     // Get active (approved) petitions count
     const activePetitions = await Petition.countDocuments({ approved: true });
 
-    // For now, we'll consider "successful petitions" as those with high signature counts
-    // You might want to add a "successful" field to your petition model later
-    const successfulPetitions = await Petition.countDocuments({
-      approved: true,
-      signaturesCount: { $gte: 1000 }, // Petitions with 1000+ signatures
-    });
+    // Get successful petitions count from SuccessfulPetition model
+    const successfulPetitions = await SuccessfulPetition.countDocuments();
 
     // Calculate signatures breakdown
     const activeSignaturesResult = await Petition.aggregate([
       { $match: { approved: true } },
-      { $group: { _id: null, totalSignatures: { $sum: "$signaturesCount" } } },
+      { $group: { _id: null, totalSignatures: { $sum: "$numberOfSignatures" } } },
     ]);
     const activeSignatures = activeSignaturesResult[0]?.totalSignatures || 0;
 
-    const successfulSignaturesResult = await Petition.aggregate([
-      { $match: { approved: true, signaturesCount: { $gte: 1000 } } },
-      { $group: { _id: null, totalSignatures: { $sum: "$signaturesCount" } } },
+    // Get total signatures from successful petitions
+    const successfulSignaturesResult = await SuccessfulPetition.aggregate([
+      { $group: { _id: null, totalSignatures: { $sum: "$totalSignatures" } } },
     ]);
     const successfulSignatures =
       successfulSignaturesResult[0]?.totalSignatures || 0;
+
+    // Get recent activity (petitions created in last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const recentPetitions = await Petition.countDocuments({
+      createdAt: { $gte: thirtyDaysAgo }
+    });
+
+    const recentSuccessfulPetitions = await SuccessfulPetition.countDocuments({
+      createdAt: { $gte: thirtyDaysAgo }
+    });
 
     const stats = {
       totalPetitions,
       totalSignatures,
       totalUsers,
-      victories: successfulPetitions, // Same as successful petitions for now
+      victories: successfulPetitions, // Count from SuccessfulPetition model
       breakdown: {
         activePetitions,
         successfulPetitions,
         activeSignatures,
         successfulSignatures,
       },
+      recentActivity: recentPetitions + recentSuccessfulPetitions,
     };
 
     res.status(200).json({
@@ -209,3 +219,4 @@ export const getAdminStats = async (req, res) => {
     });
   }
 };
+
