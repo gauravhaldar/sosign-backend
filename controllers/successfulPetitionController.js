@@ -93,11 +93,11 @@ const getSuccessfulPetitions = asyncHandler(async (req, res) => {
 
   // Build filter object
   const filter = {};
-  
+
   if (req.query.category) {
     filter.category = req.query.category;
   }
-  
+
   if (req.query.location) {
     filter.location = { $regex: req.query.location, $options: "i" };
   }
@@ -113,7 +113,7 @@ const getSuccessfulPetitions = asyncHandler(async (req, res) => {
 
   // Build sort object
   let sort = { successDate: -1 }; // Default: newest first
-  
+
   if (req.query.sort === "signatures") {
     sort = { totalSignatures: -1 };
   } else if (req.query.sort === "title") {
@@ -201,15 +201,15 @@ const updateSuccessfulPetition = asyncHandler(async (req, res) => {
 
   // Update fields
   successfulPetition.petitionTitle = petitionTitle || successfulPetition.petitionTitle;
-  successfulPetition.totalSignatures = totalSignatures !== undefined 
-    ? parseInt(totalSignatures) 
+  successfulPetition.totalSignatures = totalSignatures !== undefined
+    ? parseInt(totalSignatures)
     : successfulPetition.totalSignatures;
   successfulPetition.decisionMakers = decisionMakers || successfulPetition.decisionMakers;
   successfulPetition.issue = issue || successfulPetition.issue;
   successfulPetition.location = location || successfulPetition.location;
   successfulPetition.petitionStarterName = petitionStarterName || successfulPetition.petitionStarterName;
-  successfulPetition.startedDate = startedDate 
-    ? new Date(startedDate) 
+  successfulPetition.startedDate = startedDate
+    ? new Date(startedDate)
     : successfulPetition.startedDate;
   successfulPetition.image = image !== undefined ? image : successfulPetition.image;
   successfulPetition.outcome = outcome !== undefined ? outcome : successfulPetition.outcome;
@@ -238,7 +238,7 @@ const deleteSuccessfulPetition = asyncHandler(async (req, res) => {
   // Allow admin deletion or user deletion (if user is authenticated)
   const isAdmin = req.admin; // Admin requests have req.admin set by adminAuth middleware
   const isUser = req.user; // User requests have req.user set by protect middleware
-  
+
   if (!isAdmin && !isUser) {
     res.status(403);
     throw new Error("Not authorized to delete this successful petition");
@@ -287,7 +287,7 @@ const getSuccessfulPetitionsByCategory = asyncHandler(async (req, res) => {
 // @access  Public
 const getSuccessfulPetitionsStats = asyncHandler(async (req, res) => {
   const totalSuccessfulPetitions = await SuccessfulPetition.countDocuments();
-  
+
   const categoryStats = await SuccessfulPetition.aggregate([
     {
       $group: {
@@ -336,6 +336,124 @@ const getSuccessfulPetitionsStats = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Admin download successful petition as PDF
+// @route   GET /api/successful-petitions/admin/download/:id
+// @access  Admin
+const adminDownloadSuccessfulPetitionPDF = asyncHandler(async (req, res) => {
+  const successfulPetition = await SuccessfulPetition.findById(req.params.id)
+    .populate("originalPetitionId", "title slug numberOfSignatures");
+
+  if (!successfulPetition) {
+    res.status(404);
+    throw new Error("Successful petition not found");
+  }
+
+  // Import PDFKit dynamically
+  const PDFDocument = (await import("pdfkit")).default;
+
+  // Create PDF document
+  const doc = new PDFDocument({
+    size: "A4",
+    margin: 50,
+    info: {
+      Title: `Successful Petition: ${successfulPetition.petitionTitle}`,
+      Author: "SOSIGN Platform - Admin Export",
+      Subject: "Successful Petition Data Export",
+      CreationDate: new Date(),
+    },
+  });
+
+  // Set response headers for PDF download
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="successful-petition-${successfulPetition._id}-admin-export.pdf"`
+  );
+
+  // Pipe PDF to response
+  doc.pipe(res);
+
+  // Helper function for adding sections
+  const addSectionHeader = (text) => {
+    doc.moveDown(0.5);
+    doc.fontSize(14).fillColor("#28a745").font("Helvetica-Bold").text(text);
+    doc.moveDown(0.3);
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#e0e0e0").stroke();
+    doc.moveDown(0.5);
+    doc.fillColor("#333333").font("Helvetica");
+  };
+
+  const addLabelValue = (label, value) => {
+    doc.fontSize(10).font("Helvetica-Bold").text(`${label}: `, { continued: true });
+    doc.font("Helvetica").text(value || "N/A");
+  };
+
+  // ===== HEADER =====
+  doc.rect(0, 0, 612, 100).fill("#28a745");
+  doc.fontSize(24).fillColor("#ffffff").font("Helvetica-Bold").text("SOSIGN", 50, 30);
+  doc.fontSize(12).fillColor("#ffffff").font("Helvetica").text("Successful Petition Export", 50, 60);
+  doc.fontSize(10).text(`Generated on: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}`, 50, 78);
+
+  doc.moveDown(3);
+  doc.y = 120;
+
+  // ===== PETITION TITLE =====
+  doc.fontSize(18).fillColor("#1a1a2e").font("Helvetica-Bold").text(successfulPetition.petitionTitle, { align: "center" });
+  doc.moveDown(0.3);
+  doc.fontSize(12).fillColor("#28a745").font("Helvetica-Oblique").text("✓ SUCCESSFUL PETITION", { align: "center" });
+  doc.moveDown(1);
+
+  // ===== PETITION DETAILS =====
+  addSectionHeader("PETITION DETAILS");
+  addLabelValue("Petition ID", successfulPetition._id.toString());
+  addLabelValue("Category", successfulPetition.category || "Uncategorized");
+  addLabelValue("Location", successfulPetition.location);
+  addLabelValue("Total Signatures", successfulPetition.totalSignatures?.toLocaleString());
+  addLabelValue("Started Date", new Date(successfulPetition.startedDate).toLocaleDateString());
+  addLabelValue("Success Date", new Date(successfulPetition.successDate).toLocaleDateString());
+
+  // ===== PETITION STARTER =====
+  addSectionHeader("PETITION STARTER");
+  addLabelValue("Name", successfulPetition.petitionStarterName);
+
+  // ===== ISSUE =====
+  addSectionHeader("ISSUE");
+  doc.fontSize(10).font("Helvetica").text(successfulPetition.issue, { align: "justify" });
+
+  // ===== OUTCOME (if available) =====
+  if (successfulPetition.outcome) {
+    addSectionHeader("OUTCOME");
+    doc.fontSize(10).font("Helvetica").text(successfulPetition.outcome, { align: "justify" });
+  }
+
+  // ===== DECISION MAKERS =====
+  if (successfulPetition.decisionMakers && successfulPetition.decisionMakers.length > 0) {
+    addSectionHeader("DECISION MAKERS");
+    successfulPetition.decisionMakers.forEach((dm, index) => {
+      doc.fontSize(10).font("Helvetica").text(
+        `${index + 1}. ${dm.name}${dm.organization ? ` (${dm.organization})` : ""}${dm.email ? ` - ${dm.email}` : ""}`
+      );
+    });
+  }
+
+  // ===== ORIGINAL PETITION REFERENCE (if linked) =====
+  if (successfulPetition.originalPetitionId) {
+    addSectionHeader("ORIGINAL PETITION");
+    addLabelValue("Title", successfulPetition.originalPetitionId.title);
+    addLabelValue("Original Signatures", successfulPetition.originalPetitionId.numberOfSignatures?.toLocaleString());
+  }
+
+  // ===== FOOTER =====
+  doc.moveDown(2);
+  doc.fontSize(8).fillColor("#999999").font("Helvetica").text(
+    `This document was exported by Admin (${req.admin?.username || "admin"}) on ${new Date().toISOString()}`,
+    { align: "center" }
+  );
+
+  // Finalize PDF
+  doc.end();
+});
+
 export {
   createSuccessfulPetition,
   getSuccessfulPetitions,
@@ -344,4 +462,5 @@ export {
   deleteSuccessfulPetition,
   getSuccessfulPetitionsByCategory,
   getSuccessfulPetitionsStats,
+  adminDownloadSuccessfulPetitionPDF,
 };

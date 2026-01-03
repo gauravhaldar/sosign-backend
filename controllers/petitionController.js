@@ -212,7 +212,7 @@ const getPetitions = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
 
-  const { country, search, category } = req.query;
+  const { country, search, category, sort } = req.query;
 
   // Build query object
   let query = {};
@@ -239,9 +239,19 @@ const getPetitions = asyncHandler(async (req, res) => {
   // Only fetch approved petitions
   query.approved = true;
 
+  // Build sort object
+  let sortOption = { createdAt: -1 }; // Default: newest first
+  if (sort === "signatures") {
+    sortOption = { numberOfSignatures: -1 };
+  } else if (sort === "oldest") {
+    sortOption = { createdAt: 1 };
+  } else if (sort === "newest") {
+    sortOption = { createdAt: -1 };
+  }
+
   const petitions = await Petition.find(query)
     .populate("petitionStarter.user", "name email designation profilePicture")
-    .sort({ createdAt: -1 })
+    .sort(sortOption)
     .skip(skip)
     .limit(limit);
 
