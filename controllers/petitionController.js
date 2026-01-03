@@ -236,8 +236,9 @@ const getPetitions = asyncHandler(async (req, res) => {
     ];
   }
 
-  // Only fetch approved petitions
+  // Only fetch approved petitions that are not hidden
   query.approved = true;
+  query.hidden = { $ne: true };
 
   // Build sort object
   let sortOption = { createdAt: -1 }; // Default: newest first

@@ -85,6 +85,13 @@ const petitionSchema = mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    hidden: {
+      type: Boolean,
+      default: false,
+    },
+    hiddenAt: {
+      type: Date,
+    },
   },
   {
     timestamps: true,

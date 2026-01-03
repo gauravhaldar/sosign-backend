@@ -19,6 +19,7 @@ import successfulPetitionRoutes from "./routes/successfulPetitionRoutes.js";
 import adsRoutes from "./routes/adsRoutes.js";
 import downloadRequestRoutes from "./routes/downloadRequestRoutes.js";
 import blogRoutes from "./routes/blogRoutes.js";
+import hideRequestRoutes from "./routes/hideRequestRoutes.js";
 
 // Middleware
 import { notFound, errorHandler } from "./middleware/errorMiddleware.js";
@@ -112,6 +113,7 @@ app.use("/api/successful-petitions", successfulPetitionRoutes);
 app.use("/api/ads", adsRoutes);
 app.use("/api/download-requests", downloadRequestRoutes);
 app.use("/api/blogs", blogRoutes);
+app.use("/api/hide-requests", hideRequestRoutes);
 
 // Root endpoint
 app.get("/", (req, res) => {
