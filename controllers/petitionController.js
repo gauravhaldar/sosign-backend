@@ -239,13 +239,17 @@ const getPetitions = asyncHandler(async (req, res) => {
   // Only fetch approved petitions
   query.approved = true;
 
-  const petitions = await Petition.find(query)
-    .populate("petitionStarter.user", "name email designation profilePicture")
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(limit);
-
-  const totalPetitions = await Petition.countDocuments(query);
+  // Run count and find in parallel
+  const [petitions, totalPetitions] = await Promise.all([
+    Petition.find(query)
+      .select("-signatures") // Exclude heavy signatures array
+      .populate("petitionStarter.user", "name email designation profilePicture")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(), // Convert to plain JS objects for performance
+    Petition.countDocuments(query),
+  ]);
 
   res.status(200).json({
     petitions,
@@ -283,13 +287,16 @@ const getAllPetitionsForAdmin = asyncHandler(async (req, res) => {
   }
 
   // Admin sees ALL petitions (approved and unapproved)
-  const petitions = await Petition.find(query)
-    .populate("petitionStarter.user", "name email designation profilePicture")
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(limit);
-
-  const totalPetitions = await Petition.countDocuments(query);
+  const [petitions, totalPetitions] = await Promise.all([
+    Petition.find(query)
+      .select("-signatures")
+      .populate("petitionStarter.user", "name email designation profilePicture")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    Petition.countDocuments(query),
+  ]);
 
   res.status(200).json({
     petitions,
@@ -307,6 +314,10 @@ const getAllPetitionsForAdmin = asyncHandler(async (req, res) => {
 const getPetitionById = asyncHandler(async (req, res) => {
   const petition = await Petition.findById(req.params.id)
     .populate("petitionStarter.user", "name email designation uniqueCode profilePicture")
+    // Retrieve only the last 20 signatures to prevent overload
+    // Note: We can't easily limit populated array size in basic mongoose findById
+    // So we use slice on the projection
+    .select({ signatures: { $slice: -20 } })
     .populate("signatures.user", "name email uniqueCode")
     .populate("signatures.referral.owner", "name email uniqueCode");
 
@@ -398,17 +409,20 @@ const getUserPetitions = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
 
-  const petitions = await Petition.find({
-    "petitionStarter.user": req.user._id,
-  })
-    .populate("petitionStarter.user", "name email profilePicture")
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(limit);
-
-  const totalPetitions = await Petition.countDocuments({
-    "petitionStarter.user": req.user._id,
-  });
+  const [petitions, totalPetitions] = await Promise.all([
+    Petition.find({
+      "petitionStarter.user": req.user._id,
+    })
+      .select("-signatures")
+      .populate("petitionStarter.user", "name email profilePicture")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    Petition.countDocuments({
+      "petitionStarter.user": req.user._id,
+    })
+  ]);
 
   res.status(200).json({
     petitions,
@@ -545,19 +559,22 @@ const getPetitionsByCountry = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
 
-  const petitions = await Petition.find({
-    country: req.params.country,
-    approved: true,
-  })
-    .populate("petitionStarter.user", "name email profilePicture")
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(limit);
-
-  const totalPetitions = await Petition.countDocuments({
-    country: req.params.country,
-    approved: true,
-  });
+  const [petitions, totalPetitions] = await Promise.all([
+    Petition.find({
+      country: req.params.country,
+      approved: true,
+    })
+      .select("-signatures")
+      .populate("petitionStarter.user", "name email profilePicture")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    Petition.countDocuments({
+      country: req.params.country,
+      approved: true,
+    })
+  ]);
 
   res.status(200).json({
     petitions,
@@ -577,9 +594,11 @@ const getPopularPetitions = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
 
   const petitions = await Petition.find({ approved: true })
+    .select("-signatures")
     .populate("petitionStarter.user", "name email profilePicture")
     .sort({ numberOfSignatures: -1 })
-    .limit(limit);
+    .limit(limit)
+    .lean();
 
   res.status(200).json({
     petitions,
