@@ -41,7 +41,11 @@ app.use(helmet({
 }));
 
 // Compression middleware
-app.use(compression());
+// Compression middleware (level 6 offers good balance size/cpu)
+app.use(compression({
+    level: 6,
+    threshold: 10 * 1000 // Only compress responses > 10KB
+}));
 
 // Logging middleware (dev mode)
 if (process.env.NODE_ENV !== "production") {

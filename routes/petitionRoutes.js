@@ -14,25 +14,26 @@ import {
 } from "../controllers/petitionController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import upload from "../middleware/upload.js";
+import setCache from "../middleware/cacheMiddleware.js";
 
 const router = express.Router();
 
-// Base routes - temporarily remove protect middleware for testing
+// Base routes
 router
   .route("/")
   .post(protect, upload.single("image"), createPetition)
-  .get(getPetitions);
+  .get(setCache(60), getPetitions); // Cache list for 60s
 
-// Special routes (must come before /:id to avoid conflicts)
-router.route("/my-petitions").get(protect, getUserPetitions);
-router.route("/popular").get(getPopularPetitions);
-router.route("/stats").get(getPetitionStats);
-router.route("/country/:country").get(getPetitionsByCountry);
+// Special routes (must come before /:id)
+router.route("/my-petitions").get(protect, getUserPetitions); // Personal, do not cache with public
+router.route("/popular").get(setCache(300), getPopularPetitions); // Cache popular for 5m
+router.route("/stats").get(setCache(300), getPetitionStats); // Cache stats for 5m
+router.route("/country/:country").get(setCache(60), getPetitionsByCountry); // Cache country list for 60s
 
 // ID-specific routes
 router
   .route("/:id")
-  .get(getPetitionById)
+  .get(setCache(60), getPetitionById) // Cache details for 60s
   .put(protect, updatePetition)
   .delete(protect, deletePetition);
 
