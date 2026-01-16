@@ -18,6 +18,8 @@ import commentRoutes from "./routes/commentRoutes.js";
 import successfulPetitionRoutes from "./routes/successfulPetitionRoutes.js";
 import adsRoutes from "./routes/adsRoutes.js";
 import downloadRequestRoutes from "./routes/downloadRequestRoutes.js";
+import blogRoutes from "./routes/blogRoutes.js";
+import hideRequestRoutes from "./routes/hideRequestRoutes.js";
 
 // Middleware
 import { notFound, errorHandler } from "./middleware/errorMiddleware.js";
@@ -110,6 +112,8 @@ app.use("/api/comments", commentRoutes);
 app.use("/api/successful-petitions", successfulPetitionRoutes);
 app.use("/api/ads", adsRoutes);
 app.use("/api/download-requests", downloadRequestRoutes);
+app.use("/api/blogs", blogRoutes);
+app.use("/api/hide-requests", hideRequestRoutes);
 
 // Root endpoint
 app.get("/", (req, res) => {
@@ -124,6 +128,7 @@ app.get("/", (req, res) => {
             successfulPetitions: "/api/successful-petitions",
             ads: "/api/ads",
             downloadRequests: "/api/download-requests",
+            blogs: "/api/blogs",
             health: "/health",
         },
     });

@@ -482,6 +482,205 @@ const rejectDownloadRequest = asyncHandler(async (req, res) => {
     });
 });
 
+// @desc    Admin direct download petition data (no approval needed)
+// @route   GET /api/download-requests/admin/download/:petitionId
+// @access  Admin
+const adminDownloadPetitionData = asyncHandler(async (req, res) => {
+    const { petitionId } = req.params;
+
+    // Fetch petition with all related data
+    const petition = await Petition.findById(petitionId)
+        .populate("petitionStarter.user", "name email designation")
+        .populate("signatures.user", "name email designation");
+
+    if (!petition) {
+        res.status(404);
+        throw new Error("Petition not found");
+    }
+
+    // Fetch all approved comments for this petition
+    const comments = await Comment.find({
+        petition: petitionId,
+        isApproved: true,
+    })
+        .populate("user", "name email designation")
+        .sort({ createdAt: -1 });
+
+    // Import PDFKit dynamically
+    const PDFDocument = (await import("pdfkit")).default;
+
+    // Create PDF document
+    const doc = new PDFDocument({
+        size: "A4",
+        margin: 50,
+        info: {
+            Title: `Petition: ${petition.title}`,
+            Author: "SOSIGN Platform - Admin Export",
+            Subject: "Petition Data Export",
+            CreationDate: new Date(),
+        },
+    });
+
+    // Set response headers for PDF download
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="petition-${petition._id}-admin-export.pdf"`
+    );
+
+    // Pipe PDF to response
+    doc.pipe(res);
+
+    // Helper function for adding sections
+    const addSectionHeader = (text) => {
+        doc.moveDown(0.5);
+        doc.fontSize(14).fillColor("#3650AD").font("Helvetica-Bold").text(text);
+        doc.moveDown(0.3);
+        doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#e0e0e0").stroke();
+        doc.moveDown(0.5);
+        doc.fillColor("#333333").font("Helvetica");
+    };
+
+    const addLabelValue = (label, value) => {
+        doc.fontSize(10).font("Helvetica-Bold").text(`${label}: `, { continued: true });
+        doc.font("Helvetica").text(value || "N/A");
+    };
+
+    // ===== HEADER =====
+    doc.rect(0, 0, 612, 100).fill("#3650AD");
+    doc.fontSize(24).fillColor("#ffffff").font("Helvetica-Bold").text("SOSIGN", 50, 30);
+    doc.fontSize(12).fillColor("#ffffff").font("Helvetica").text("Admin Petition Data Export", 50, 60);
+    doc.fontSize(10).text(`Generated on: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}`, 50, 78);
+
+    doc.moveDown(3);
+    doc.y = 120;
+
+    // ===== PETITION TITLE =====
+    doc.fontSize(18).fillColor("#1a1a2e").font("Helvetica-Bold").text(petition.title, { align: "center" });
+    doc.moveDown(1);
+
+    // ===== PETITION DETAILS =====
+    addSectionHeader("PETITION DETAILS");
+    addLabelValue("Petition ID", petition._id.toString());
+    addLabelValue("Country", petition.country);
+    addLabelValue("Categories", petition.categories?.join(", ") || "N/A");
+    addLabelValue("Status", petition.approved ? "Approved" : "Pending Approval");
+    addLabelValue("Created At", new Date(petition.createdAt).toLocaleDateString());
+    addLabelValue("Last Updated", new Date(petition.updatedAt).toLocaleDateString());
+
+    // Problem & Solution
+    if (petition.petitionDetails?.problem) {
+        addSectionHeader("PROBLEM");
+        doc.fontSize(10).font("Helvetica").text(petition.petitionDetails.problem, { align: "justify" });
+    }
+
+    if (petition.petitionDetails?.solution) {
+        addSectionHeader("SOLUTION");
+        doc.fontSize(10).font("Helvetica").text(petition.petitionDetails.solution, { align: "justify" });
+    }
+
+    // ===== PETITION STARTER =====
+    addSectionHeader("PETITION STARTER");
+    addLabelValue("Name", petition.petitionStarter?.name || petition.petitionStarter?.user?.name || "Anonymous");
+    addLabelValue("Email", petition.petitionStarter?.user?.email || "N/A");
+    addLabelValue("Location", petition.petitionStarter?.location || "N/A");
+    if (petition.petitionStarter?.comment) {
+        doc.moveDown(0.3);
+        doc.fontSize(10).font("Helvetica-Oblique").text(`"${petition.petitionStarter.comment}"`, { indent: 20 });
+    }
+
+    // ===== DECISION MAKERS =====
+    if (petition.decisionMakers && petition.decisionMakers.length > 0) {
+        addSectionHeader("DECISION MAKERS");
+        petition.decisionMakers.forEach((dm, index) => {
+            doc.fontSize(10).font("Helvetica").text(`${index + 1}. ${dm.name}${dm.organization ? ` (${dm.organization})` : ""}${dm.email ? ` - ${dm.email}` : ""}`);
+        });
+    }
+
+    // ===== STATISTICS =====
+    addSectionHeader("STATISTICS");
+    const totalSignatures = petition.numberOfSignatures || petition.signatures?.length || 0;
+    doc.fontSize(12).font("Helvetica-Bold").fillColor("#F43676").text(`Total Signatures: ${totalSignatures}`);
+    doc.fillColor("#333333").fontSize(10).font("Helvetica").text(`Total Comments: ${comments.length}`);
+
+    // ===== SIGNATURES LIST =====
+    if (petition.signatures && petition.signatures.length > 0) {
+        if (doc.y > 650) {
+            doc.addPage();
+        } else {
+            doc.moveDown(1);
+        }
+        addSectionHeader(`SIGNATURES (${petition.signatures.length} total)`);
+
+        // Table header
+        const tableTop = doc.y;
+        const tableLeft = 50;
+        doc.fontSize(9).font("Helvetica-Bold");
+        doc.text("#", tableLeft, tableTop, { width: 30 });
+        doc.text("Name", tableLeft + 30, tableTop, { width: 150 });
+        doc.text("Email", tableLeft + 180, tableTop, { width: 180 });
+        doc.text("Signed At", tableLeft + 360, tableTop, { width: 100 });
+        doc.moveDown(0.5);
+        doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#e0e0e0").stroke();
+        doc.moveDown(0.3);
+
+        // Table rows
+        doc.font("Helvetica").fontSize(8);
+        petition.signatures.slice(0, 100).forEach((sig, index) => {
+            if (doc.y > 750) {
+                doc.addPage();
+                doc.y = 50;
+            }
+            const rowY = doc.y;
+            doc.text(`${index + 1}`, tableLeft, rowY, { width: 30 });
+            doc.text(sig.user?.name || "Anonymous", tableLeft + 30, rowY, { width: 150 });
+            doc.text(sig.user?.email || "N/A", tableLeft + 180, rowY, { width: 180 });
+            doc.text(sig.signedAt ? new Date(sig.signedAt).toLocaleDateString() : "N/A", tableLeft + 360, rowY, { width: 100 });
+            doc.moveDown(0.5);
+        });
+
+        if (petition.signatures.length > 100) {
+            doc.moveDown(0.5);
+            doc.fontSize(9).font("Helvetica-Oblique").text(`... and ${petition.signatures.length - 100} more signatures`);
+        }
+    }
+
+    // ===== COMMENTS =====
+    if (comments.length > 0) {
+        if (doc.y > 650) {
+            doc.addPage();
+        } else {
+            doc.moveDown(1);
+        }
+        addSectionHeader(`COMMENTS (${comments.length} total)`);
+
+        comments.slice(0, 50).forEach((comment, index) => {
+            if (doc.y > 700) {
+                doc.addPage();
+                doc.y = 50;
+            }
+            doc.fontSize(9).font("Helvetica-Bold").text(`${index + 1}. ${comment.user?.name || "Anonymous"}`, { continued: true });
+            doc.font("Helvetica").fontSize(8).fillColor("#666666").text(` - ${new Date(comment.createdAt).toLocaleDateString()}`);
+            doc.fillColor("#333333").fontSize(9).font("Helvetica").text(comment.content, { indent: 15 });
+            doc.moveDown(0.5);
+        });
+
+        if (comments.length > 50) {
+            doc.fontSize(9).font("Helvetica-Oblique").text(`... and ${comments.length - 50} more comments`);
+        }
+    }
+
+    // ===== FOOTER =====
+    doc.moveDown(1.5);
+    doc.fontSize(8).fillColor("#999999").font("Helvetica").text(
+        `This document was exported by Admin (${req.admin?.username || "admin"}) on ${new Date().toISOString()}`,
+        { align: "center" }
+    );
+
+    // Finalize PDF
+    doc.end();
+});
+
 export {
     createDownloadRequest,
     getUserDownloadRequests,
@@ -491,4 +690,5 @@ export {
     getPendingRequestsCount,
     approveDownloadRequest,
     rejectDownloadRequest,
+    adminDownloadPetitionData,
 };
