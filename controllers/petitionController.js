@@ -187,6 +187,7 @@ const createPetition = asyncHandler(async (req, res) => {
       message: "Petition created successfully",
       petition: {
         _id: petition._id,
+        slug: petition.slug,
         title: petition.title,
         decisionMakers: petition.decisionMakers,
         country: petition.country,
@@ -319,18 +320,34 @@ const getAllPetitionsForAdmin = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Get petition by ID
+// @desc    Get petition by ID or slug
 // @route   GET /api/petitions/:id
 // @access  Public
 const getPetitionById = asyncHandler(async (req, res) => {
-  const petition = await Petition.findById(req.params.id)
-    .populate("petitionStarter.user", "name email designation uniqueCode profilePicture")
-    // Retrieve only the last 20 signatures to prevent overload
-    // Note: We can't easily limit populated array size in basic mongoose findById
-    // So we use slice on the projection
-    .select({ signatures: { $slice: -20 } })
-    .populate("signatures.user", "name email uniqueCode")
-    .populate("signatures.referral.owner", "name email uniqueCode");
+  const idOrSlug = req.params.id;
+
+  // Check if the param is a valid MongoDB ObjectId
+  const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(idOrSlug);
+
+  let petition;
+
+  if (isValidObjectId) {
+    // Try to find by ID first
+    petition = await Petition.findById(idOrSlug)
+      .populate("petitionStarter.user", "name email designation uniqueCode profilePicture")
+      .select({ signatures: { $slice: -20 } })
+      .populate("signatures.user", "name email uniqueCode")
+      .populate("signatures.referral.owner", "name email uniqueCode");
+  }
+
+  // If not found by ID, try to find by slug
+  if (!petition) {
+    petition = await Petition.findOne({ slug: idOrSlug })
+      .populate("petitionStarter.user", "name email designation uniqueCode profilePicture")
+      .select({ signatures: { $slice: -20 } })
+      .populate("signatures.user", "name email uniqueCode")
+      .populate("signatures.referral.owner", "name email uniqueCode");
+  }
 
   if (petition) {
     res.status(200).json(petition);

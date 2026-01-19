@@ -1,10 +1,27 @@
 import mongoose from "mongoose";
 
+// Helper function to generate URL-friendly slug from title
+function generateSlug(title) {
+  return title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+    .replace(/\s+/g, '-')          // Replace spaces with hyphens
+    .replace(/-+/g, '-')           // Replace multiple hyphens with single
+    .replace(/^-|-$/g, '')         // Remove leading/trailing hyphens
+    .substring(0, 100);            // Limit length
+}
+
 const petitionSchema = mongoose.Schema(
   {
     title: {
       type: String,
       required: true,
+    },
+    slug: {
+      type: String,
+      unique: true,
+      index: true,
     },
     decisionMakers: [
       {
@@ -97,6 +114,35 @@ const petitionSchema = mongoose.Schema(
     timestamps: true,
   }
 );
+
+// Pre-save hook to generate slug from title
+petitionSchema.pre('save', async function (next) {
+  // Only generate slug if title is modified or slug doesn't exist
+  if (this.isModified('title') || !this.slug) {
+    let baseSlug = generateSlug(this.title);
+    let slug = baseSlug;
+    let counter = 1;
+
+    // Check for existing slugs and add suffix if needed
+    while (true) {
+      const existingPetition = await mongoose.model('Petition').findOne({
+        slug: slug,
+        _id: { $ne: this._id }
+      });
+
+      if (!existingPetition) {
+        break;
+      }
+
+      // Add counter suffix for duplicate titles
+      slug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+
+    this.slug = slug;
+  }
+  next();
+});
 
 // Indexes for performance optimization
 petitionSchema.index({ approved: 1, hidden: 1, createdAt: -1 }); // For default listing (recent active petitions)
