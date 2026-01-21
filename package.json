@@ -33,6 +33,7 @@
     "nodemailer": "^7.0.6",
     "nodemon": "^3.1.10",
     "pdfkit": "^0.17.2",
-    "rate-limit": "^0.1.1"
+    "rate-limit": "^0.1.1",
+    "resend": "^6.8.0"
   }
 }

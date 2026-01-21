@@ -285,7 +285,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
   const frontendUrl = 'https://www.sosign.in';
   const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
 
-  // Send email
+  // Send email using SMTP
   try {
     const { sendEmail } = await import('../config/emailConfig.js');
 
