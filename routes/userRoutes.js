@@ -7,6 +7,8 @@ import {
   updateUserProfile,
   authGoogleUser,
   getUserByCode,
+  forgotPassword,
+  resetPassword,
 } from "../controllers/userController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import profileUpload from "../middleware/profileUpload.js";
@@ -21,5 +23,7 @@ router.route("/profile")
   .put(protect, profileUpload.single("profilePicture"), updateUserProfile);
 router.post("/google-auth", authGoogleUser);
 router.get("/code/:code", getUserByCode);
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password", resetPassword);
 
 export default router;

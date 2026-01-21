@@ -8,11 +8,15 @@ const createTransporter = () => {
   // For Gmail SMTP
   if (process.env.EMAIL_SERVICE === 'gmail') {
     return nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true, // use SSL
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASSWORD, // Use App Password for Gmail
       },
+      debug: true, // Enable debug output
+      logger: true, // Log to console
     });
   }
 
@@ -187,7 +191,7 @@ export const createPetitionEmailTemplate = (petition, petitionUrl) => {
 export const sendEmail = async (to, subject, html, text) => {
   try {
     const transporter = createTransporter();
-    
+
     const mailOptions = {
       from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
       to: to,
@@ -210,10 +214,10 @@ export const sendPetitionNotificationEmails = async (petition, frontendUrl) => {
   try {
     // Create petition URL
     const petitionUrl = `${frontendUrl}/currentpetitions/${petition._id}`;
-    
+
     // Get email template
     const emailTemplate = createPetitionEmailTemplate(petition, petitionUrl);
-    
+
     // Send emails to all decision makers
     const emailPromises = petition.decisionMakers.map(async (decisionMaker) => {
       if (decisionMaker.email) {
@@ -223,13 +227,13 @@ export const sendPetitionNotificationEmails = async (petition, frontendUrl) => {
           emailTemplate.html,
           emailTemplate.text
         );
-        
+
         if (result.success) {
           console.log(`Email sent successfully to ${decisionMaker.email}`);
         } else {
           console.error(`Failed to send email to ${decisionMaker.email}:`, result.error);
         }
-        
+
         return {
           email: decisionMaker.email,
           success: result.success,
@@ -244,7 +248,7 @@ export const sendPetitionNotificationEmails = async (petition, frontendUrl) => {
     });
 
     const results = await Promise.all(emailPromises);
-    
+
     return {
       success: true,
       results: results,

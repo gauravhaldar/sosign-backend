@@ -61,6 +61,15 @@ const userSchema = mongoose.Schema(
       instagram: { type: String, default: "" },
       youtube: { type: String, default: "" },
     },
+    // Password reset fields
+    passwordResetToken: {
+      type: String,
+      default: null,
+    },
+    passwordResetExpires: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
