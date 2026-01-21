@@ -281,8 +281,8 @@ const forgotPassword = asyncHandler(async (req, res) => {
   user.passwordResetExpires = Date.now() + 3600000; // 1 hour from now
   await user.save();
 
-  // Create reset URL
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  // Create reset URL - hardcoded for reliability
+  const frontendUrl = 'https://www.sosign.in';
   const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
 
   // Send email
