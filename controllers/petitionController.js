@@ -729,6 +729,47 @@ const getPetitionStats = asyncHandler(async (req, res) => {
   }
 });
 
+// @desc    Get petitions signed by user
+// @route   GET /api/petitions/signed
+// @access  Private
+const getSignedPetitions = asyncHandler(async (req, res) => {
+  // Check if user is authenticated
+  if (!req.user || !req.user._id) {
+    res.status(401);
+    throw new Error("Not authorized, please login");
+  }
+
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const skip = (page - 1) * limit;
+
+  // Find petitions where the user has signed (but NOT petitions they created)
+  const query = {
+    "signatures.user": req.user._id,
+    "petitionStarter.user": { $ne: req.user._id }, // Exclude user's own petitions
+  };
+
+  const [petitions, totalPetitions] = await Promise.all([
+    Petition.find(query)
+      .select("-signatures")
+      .populate("petitionStarter.user", "name email profilePicture")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    Petition.countDocuments(query),
+  ]);
+
+  res.status(200).json({
+    petitions,
+    currentPage: page,
+    totalPages: Math.ceil(totalPetitions / limit),
+    totalPetitions,
+    hasNextPage: page < Math.ceil(totalPetitions / limit),
+    hasPrevPage: page > 1,
+  });
+});
+
 export {
   createPetition,
   getPetitions,
@@ -742,4 +783,5 @@ export {
   getPetitionsByCountry,
   getPopularPetitions,
   getPetitionStats,
+  getSignedPetitions,
 };

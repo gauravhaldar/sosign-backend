@@ -11,6 +11,7 @@ import {
   getPetitionsByCountry,
   getPopularPetitions,
   getPetitionStats,
+  getSignedPetitions,
 } from "../controllers/petitionController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import upload from "../middleware/upload.js";
@@ -26,6 +27,7 @@ router
 
 // Special routes (must come before /:id)
 router.route("/my-petitions").get(protect, getUserPetitions); // Personal, do not cache with public
+router.route("/signed").get(protect, getSignedPetitions); // Petitions user has signed
 router.route("/popular").get(setCache(300), getPopularPetitions); // Cache popular for 5m
 router.route("/stats").get(setCache(300), getPetitionStats); // Cache stats for 5m
 router.route("/country/:country").get(setCache(60), getPetitionsByCountry); // Cache country list for 60s

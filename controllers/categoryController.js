@@ -1,0 +1,78 @@
+import asyncHandler from "express-async-handler";
+import Category from "../models/categoryModel.js";
+
+// @desc    Get all categories
+// @route   GET /api/categories
+// @access  Public
+const getCategories = asyncHandler(async (req, res) => {
+    const categories = await Category.find({})
+        .sort({ isDefault: -1, name: 1 }) // Default categories first, then alphabetical
+        .lean();
+
+    res.status(200).json({
+        success: true,
+        categories,
+        total: categories.length,
+    });
+});
+
+// @desc    Create a new category
+// @route   POST /api/categories
+// @access  Private (requires authentication)
+const createCategory = asyncHandler(async (req, res) => {
+    const { name, icon } = req.body;
+
+    if (!name || name.trim().length === 0) {
+        res.status(400);
+        throw new Error("Category name is required");
+    }
+
+    // Check if category already exists (case-insensitive)
+    const existingCategory = await Category.findOne({
+        name: { $regex: new RegExp(`^${name.trim()}$`, 'i') }
+    });
+
+    if (existingCategory) {
+        res.status(400);
+        throw new Error("A category with this name already exists");
+    }
+
+    const category = await Category.create({
+        name: name.trim(),
+        icon: icon || null,
+        isDefault: false,
+        createdBy: req.user?._id || null,
+    });
+
+    res.status(201).json({
+        success: true,
+        message: "Category created successfully",
+        category: {
+            _id: category._id,
+            name: category.name,
+            slug: category.slug,
+            icon: category.icon,
+            isDefault: category.isDefault,
+            createdAt: category.createdAt,
+        },
+    });
+});
+
+// @desc    Get category by slug
+// @route   GET /api/categories/:slug
+// @access  Public
+const getCategoryBySlug = asyncHandler(async (req, res) => {
+    const category = await Category.findOne({ slug: req.params.slug }).lean();
+
+    if (!category) {
+        res.status(404);
+        throw new Error("Category not found");
+    }
+
+    res.status(200).json({
+        success: true,
+        category,
+    });
+});
+
+export { getCategories, createCategory, getCategoryBySlug };

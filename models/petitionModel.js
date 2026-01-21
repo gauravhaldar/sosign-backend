@@ -37,20 +37,7 @@ const petitionSchema = mongoose.Schema(
     },
     categories: [{
       type: String,
-      enum: [
-        'animals',
-        'game',
-        'interior',
-        'lifestyle',
-        'sports',
-        'technology',
-        'travel',
-        'environment',
-        'education',
-        'health',
-        'politics',
-        'human_rights'
-      ]
+      // No enum constraint - allows dynamic category creation
     }],
     petitionDetails: {
       problem: { type: String, required: true },

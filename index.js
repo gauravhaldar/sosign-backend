@@ -20,15 +20,26 @@ import adsRoutes from "./routes/adsRoutes.js";
 import downloadRequestRoutes from "./routes/downloadRequestRoutes.js";
 import blogRoutes from "./routes/blogRoutes.js";
 import hideRequestRoutes from "./routes/hideRequestRoutes.js";
+import categoryRoutes from "./routes/categoryRoutes.js";
 
 // Middleware
 import { notFound, errorHandler } from "./middleware/errorMiddleware.js";
 
+// Models (for seeding)
+import Category from "./models/categoryModel.js";
+
 // Load environment variables
 dotenv.config();
 
-// Connect to database
-connectDB();
+// Connect to database and seed default data
+connectDB().then(async () => {
+    // Seed default categories
+    try {
+        await Category.seedDefaults();
+    } catch (error) {
+        console.error("Error seeding categories:", error.message);
+    }
+});
 
 const app = express();
 
@@ -118,6 +129,7 @@ app.use("/api/ads", adsRoutes);
 app.use("/api/download-requests", downloadRequestRoutes);
 app.use("/api/blogs", blogRoutes);
 app.use("/api/hide-requests", hideRequestRoutes);
+app.use("/api/categories", categoryRoutes);
 
 // Root endpoint
 app.get("/", (req, res) => {
@@ -133,6 +145,7 @@ app.get("/", (req, res) => {
             ads: "/api/ads",
             downloadRequests: "/api/download-requests",
             blogs: "/api/blogs",
+            categories: "/api/categories",
             health: "/health",
         },
     });
