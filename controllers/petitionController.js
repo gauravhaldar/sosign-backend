@@ -9,7 +9,7 @@ import { sendPetitionNotificationEmails } from "../config/emailConfig.js";
 // @route   POST /api/petitions
 // @access  Private
 const createPetition = asyncHandler(async (req, res) => {
-  const { title, decisionMakers, country, petitionDetails, petitionStarter, categories } =
+  const { title, decisionMakers, country, petitionDetails, petitionStarter, categories, constituencySettings } =
     req.body;
 
   // Parse decisionMakers if it's a string (from FormData)
@@ -53,6 +53,17 @@ const createPetition = asyncHandler(async (req, res) => {
     } catch (error) {
       res.status(400);
       throw new Error("Invalid categories data format");
+    }
+  }
+
+  // Parse constituencySettings if it's a string (from FormData)
+  let parsedConstituencySettings = constituencySettings || { required: false };
+  if (typeof constituencySettings === "string") {
+    try {
+      parsedConstituencySettings = JSON.parse(constituencySettings);
+    } catch (error) {
+      res.status(400);
+      throw new Error("Invalid constituency settings data format");
     }
   }
 
@@ -125,6 +136,7 @@ const createPetition = asyncHandler(async (req, res) => {
       ...parsedPetitionStarter,
       user: userId,
     },
+    constituencySettings: parsedConstituencySettings,
     approved: false, // Explicitly set to false for approval workflow
   });
 
@@ -498,6 +510,24 @@ const signPetition = asyncHandler(async (req, res) => {
     throw new Error("You have already signed this petition");
   }
 
+  // Validate constituency number if required
+  const constituencyNumber = req.body?.constituencyNumber?.trim();
+
+  if (petition.constituencySettings?.required) {
+    if (!constituencyNumber) {
+      res.status(400);
+      throw new Error("Constituency number is required to sign this petition");
+    }
+
+    // Check if specific constituency is required
+    if (petition.constituencySettings.allowedConstituency) {
+      if (constituencyNumber !== petition.constituencySettings.allowedConstituency) {
+        res.status(400);
+        throw new Error(`This petition is restricted to constituency: ${petition.constituencySettings.allowedConstituency}`);
+      }
+    }
+  }
+
   // Accept optional referral code from body or query
   let referralDetails = undefined;
   try {
@@ -534,6 +564,7 @@ const signPetition = asyncHandler(async (req, res) => {
   petition.signatures.push({
     user: req.user._id,
     referral: referralDetails,
+    constituencyNumber: constituencyNumber || undefined,
     signedAt: new Date(),
   });
   petition.numberOfSignatures += 1;

@@ -27,7 +27,7 @@ const petitionSchema = mongoose.Schema(
       {
         name: { type: String, required: true },
         organization: { type: String },
-        email: { type: String, required: true },
+        email: { type: String },  // Optional - frontend allows empty email
         phone: { type: String },
       },
     ],
@@ -79,6 +79,7 @@ const petitionSchema = mongoose.Schema(
           code: { type: String },
           owner: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
         },
+        constituencyNumber: { type: String },  // Constituency number of the signer
         signedAt: {
           type: Date,
           default: Date.now,
@@ -95,6 +96,11 @@ const petitionSchema = mongoose.Schema(
     },
     hiddenAt: {
       type: Date,
+    },
+    // Constituency requirement settings
+    constituencySettings: {
+      required: { type: Boolean, default: false },  // Is constituency number mandatory to sign?
+      allowedConstituency: { type: String },         // If set, only users with this constituency can sign
     },
   },
   {

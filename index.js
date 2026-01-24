@@ -21,6 +21,7 @@ import downloadRequestRoutes from "./routes/downloadRequestRoutes.js";
 import blogRoutes from "./routes/blogRoutes.js";
 import hideRequestRoutes from "./routes/hideRequestRoutes.js";
 import categoryRoutes from "./routes/categoryRoutes.js";
+import captchaRoutes from "./routes/captchaRoutes.js";
 
 // Middleware
 import { notFound, errorHandler } from "./middleware/errorMiddleware.js";
@@ -81,6 +82,8 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
     : [
         "http://localhost:3000",
         "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
         "https://sosign.vercel.app",
         "https://sosign-admin.vercel.app",
     ];
@@ -90,11 +93,18 @@ app.use(
         origin: function (origin, callback) {
             // Allow requests with no origin (like mobile apps or curl requests)
             if (!origin) return callback(null, true);
+
+            // In development, allow all localhost origins
+            if (process.env.NODE_ENV !== "production" && origin.includes("localhost")) {
+                return callback(null, true);
+            }
+
             if (allowedOrigins.indexOf(origin) !== -1) {
                 callback(null, true);
             } else {
                 console.log("Blocked by CORS:", origin);
-                callback(new Error("Not allowed by CORS"));
+                // Return false instead of throwing to avoid 500 errors
+                callback(null, false);
             }
         },
         credentials: true,
@@ -130,6 +140,7 @@ app.use("/api/download-requests", downloadRequestRoutes);
 app.use("/api/blogs", blogRoutes);
 app.use("/api/hide-requests", hideRequestRoutes);
 app.use("/api/categories", categoryRoutes);
+app.use("/api/captcha", captchaRoutes);
 
 // Root endpoint
 app.get("/", (req, res) => {
@@ -146,6 +157,7 @@ app.get("/", (req, res) => {
             downloadRequests: "/api/download-requests",
             blogs: "/api/blogs",
             categories: "/api/categories",
+            captcha: "/api/captcha",
             health: "/health",
         },
     });
