@@ -22,6 +22,7 @@ import blogRoutes from "./routes/blogRoutes.js";
 import hideRequestRoutes from "./routes/hideRequestRoutes.js";
 import categoryRoutes from "./routes/categoryRoutes.js";
 import captchaRoutes from "./routes/captchaRoutes.js";
+import walletRoutes from "./routes/walletRoutes.js";
 
 // Middleware
 import { notFound, errorHandler } from "./middleware/errorMiddleware.js";
@@ -141,6 +142,7 @@ app.use("/api/blogs", blogRoutes);
 app.use("/api/hide-requests", hideRequestRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/captcha", captchaRoutes);
+app.use("/api/wallet", walletRoutes);
 
 // Root endpoint
 app.get("/", (req, res) => {
