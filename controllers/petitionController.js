@@ -386,7 +386,7 @@ const updatePetition = asyncHandler(async (req, res) => {
     throw new Error("Not authorized to update this petition");
   }
 
-  const { title, decisionMakers, country, petitionDetails } = req.body;
+  const { title, decisionMakers, country, petitionDetails, constituencySettings } = req.body;
 
   // Update only the fields that are provided
   if (title !== undefined) petition.title = title;
@@ -396,6 +396,12 @@ const updatePetition = asyncHandler(async (req, res) => {
     petition.petitionDetails = {
       ...petition.petitionDetails,
       ...petitionDetails,
+    };
+  }
+  if (constituencySettings !== undefined) {
+    petition.constituencySettings = {
+      required: constituencySettings.required || false,
+      allowedConstituency: constituencySettings.allowedConstituency || undefined,
     };
   }
 
