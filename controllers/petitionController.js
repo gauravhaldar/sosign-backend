@@ -9,7 +9,7 @@ import { sendPetitionNotificationEmails } from "../config/emailConfig.js";
 // @route   POST /api/petitions
 // @access  Private
 const createPetition = asyncHandler(async (req, res) => {
-  const { title, decisionMakers, country, petitionDetails, petitionStarter, categories, constituencySettings } =
+  const { title, decisionMakers, country, petitionDetails, petitionStarter, categories, constituencySettings, signingRequirements } =
     req.body;
 
   // Parse decisionMakers if it's a string (from FormData)
@@ -56,7 +56,7 @@ const createPetition = asyncHandler(async (req, res) => {
     }
   }
 
-  // Parse constituencySettings if it's a string (from FormData)
+  // Parse constituencySettings if it's a string (from FormData) - Keep for backward compatibility
   let parsedConstituencySettings = constituencySettings || { required: false };
   if (typeof constituencySettings === "string") {
     try {
@@ -64,6 +64,20 @@ const createPetition = asyncHandler(async (req, res) => {
     } catch (error) {
       res.status(400);
       throw new Error("Invalid constituency settings data format");
+    }
+  }
+
+  // Parse signingRequirements if it's a string (from FormData)
+  let parsedSigningRequirements = signingRequirements || {
+    constituency: { required: false, allowedConstituency: undefined },
+    aadhar: { required: false },
+  };
+  if (typeof signingRequirements === "string") {
+    try {
+      parsedSigningRequirements = JSON.parse(signingRequirements);
+    } catch (error) {
+      res.status(400);
+      throw new Error("Invalid signing requirements data format");
     }
   }
 
@@ -137,6 +151,7 @@ const createPetition = asyncHandler(async (req, res) => {
       user: userId,
     },
     constituencySettings: parsedConstituencySettings,
+    signingRequirements: parsedSigningRequirements,
     approved: false, // Explicitly set to false for approval workflow
   });
 
@@ -386,7 +401,7 @@ const updatePetition = asyncHandler(async (req, res) => {
     throw new Error("Not authorized to update this petition");
   }
 
-  const { title, decisionMakers, country, petitionDetails, constituencySettings } = req.body;
+  const { title, decisionMakers, country, petitionDetails, constituencySettings, signingRequirements } = req.body;
 
   // Update only the fields that are provided
   if (title !== undefined) petition.title = title;
@@ -402,6 +417,17 @@ const updatePetition = asyncHandler(async (req, res) => {
     petition.constituencySettings = {
       required: constituencySettings.required || false,
       allowedConstituency: constituencySettings.allowedConstituency || undefined,
+    };
+  }
+  if (signingRequirements !== undefined) {
+    petition.signingRequirements = {
+      constituency: {
+        required: signingRequirements.constituency?.required || false,
+        allowedConstituency: signingRequirements.constituency?.allowedConstituency || undefined,
+      },
+      aadhar: {
+        required: signingRequirements.aadhar?.required || false,
+      },
     };
   }
 
@@ -516,9 +542,11 @@ const signPetition = asyncHandler(async (req, res) => {
     throw new Error("You have already signed this petition");
   }
 
-  // Validate constituency number if required
+  // Validate signing requirements
   const constituencyNumber = req.body?.constituencyNumber?.trim();
+  const aadharNumber = req.body?.aadharNumber?.trim();
 
+  // Check constituency requirement (backward compatibility)
   if (petition.constituencySettings?.required) {
     if (!constituencyNumber) {
       res.status(400);
@@ -531,6 +559,30 @@ const signPetition = asyncHandler(async (req, res) => {
         res.status(400);
         throw new Error(`This petition is restricted to constituency: ${petition.constituencySettings.allowedConstituency}`);
       }
+    }
+  }
+
+  // Check new signing requirements
+  if (petition.signingRequirements?.constituency?.required) {
+    if (!constituencyNumber) {
+      res.status(400);
+      throw new Error("Constituency number is required to sign this petition");
+    }
+
+    // Check if specific constituency is required
+    if (petition.signingRequirements.constituency.allowedConstituency) {
+      if (constituencyNumber !== petition.signingRequirements.constituency.allowedConstituency) {
+        res.status(400);
+        throw new Error(`This petition is restricted to constituency: ${petition.signingRequirements.constituency.allowedConstituency}`);
+      }
+    }
+  }
+
+  // Check aadhar requirement
+  if (petition.signingRequirements?.aadhar?.required) {
+    if (!aadharNumber) {
+      res.status(400);
+      throw new Error("Aadhar number is required to sign this petition");
     }
   }
 
@@ -571,6 +623,7 @@ const signPetition = asyncHandler(async (req, res) => {
     user: req.user._id,
     referral: referralDetails,
     constituencyNumber: constituencyNumber || undefined,
+    aadharNumber: aadharNumber || undefined,
     signedAt: new Date(),
   });
   petition.numberOfSignatures += 1;

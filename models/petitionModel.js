@@ -80,6 +80,7 @@ const petitionSchema = mongoose.Schema(
           owner: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
         },
         constituencyNumber: { type: String },  // Constituency number of the signer
+        aadharNumber: { type: String },        // Aadhar number of the signer
         signedAt: {
           type: Date,
           default: Date.now,
@@ -101,6 +102,16 @@ const petitionSchema = mongoose.Schema(
     constituencySettings: {
       required: { type: Boolean, default: false },  // Is constituency number mandatory to sign?
       allowedConstituency: { type: String },         // If set, only users with this constituency can sign
+    },
+    // New signing requirements settings (supports both constituency and aadhar)
+    signingRequirements: {
+      constituency: {
+        required: { type: Boolean, default: false },  // Is constituency number mandatory to sign?
+        allowedConstituency: { type: String },         // If set, only users with this constituency can sign
+      },
+      aadhar: {
+        required: { type: Boolean, default: false },  // Is aadhar number mandatory to sign?
+      },
     },
   },
   {
