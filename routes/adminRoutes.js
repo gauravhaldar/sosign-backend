@@ -61,4 +61,41 @@ router.delete("/successful-petitions/:id", adminAuth, deleteSuccessfulPetition);
 router.get("/petitions/:petitionId/comments", adminAuth, getCommentsByPetition);
 router.delete("/comments/:id", adminAuth, deleteComment);
 
+// Admin wallet management routes
+router.get("/wallets", adminAuth, async (req, res) => {
+  try {
+    const Wallet = await import("../models/walletModel.js").then(m => m.default);
+    const User = await import("../models/userModel.js").then(m => m.default);
+    
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+    
+    // Get total count
+    const totalWallets = await Wallet.countDocuments();
+    
+    // Get wallets with user info
+    const wallets = await Wallet.find()
+      .populate("userId", "name email mobileNumber uniqueCode")
+      .sort({ balance: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+    
+    const totalPages = Math.ceil(totalWallets / limit);
+    
+    res.status(200).json({
+      success: true,
+      wallets,
+      currentPage: page,
+      totalPages,
+      totalWallets,
+      limit
+    });
+  } catch (error) {
+    console.error("Error fetching wallets:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 export default router;
