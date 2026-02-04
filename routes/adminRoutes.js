@@ -66,14 +66,14 @@ router.get("/wallets", adminAuth, async (req, res) => {
   try {
     const Wallet = await import("../models/walletModel.js").then(m => m.default);
     const User = await import("../models/userModel.js").then(m => m.default);
-    
+
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
-    
+
     // Get total count
     const totalWallets = await Wallet.countDocuments();
-    
+
     // Get wallets with user info
     const wallets = await Wallet.find()
       .populate("userId", "name email mobileNumber uniqueCode")
@@ -81,9 +81,9 @@ router.get("/wallets", adminAuth, async (req, res) => {
       .skip(skip)
       .limit(limit)
       .lean();
-    
+
     const totalPages = Math.ceil(totalWallets / limit);
-    
+
     res.status(200).json({
       success: true,
       wallets,
@@ -94,6 +94,31 @@ router.get("/wallets", adminAuth, async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching wallets:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Admin category management routes
+router.get("/categories", adminAuth, async (req, res) => {
+  try {
+    const Category = await import("../models/categoryModel.js").then(m => m.default);
+    const categories = await Category.find({}).sort({ isDefault: -1, name: 1 }).lean();
+    res.status(200).json({ success: true, categories });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.delete("/categories/:id", adminAuth, async (req, res) => {
+  try {
+    const Category = await import("../models/categoryModel.js").then(m => m.default);
+    const category = await Category.findById(req.params.id);
+    if (!category) {
+      return res.status(404).json({ success: false, message: "Category not found" });
+    }
+    await Category.findByIdAndDelete(req.params.id);
+    res.status(200).json({ success: true, message: "Category deleted successfully" });
+  } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });

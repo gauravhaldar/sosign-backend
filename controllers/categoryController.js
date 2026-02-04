@@ -27,6 +27,11 @@ const createCategory = asyncHandler(async (req, res) => {
         throw new Error("Category name is required");
     }
 
+    if (name.trim().length > 15) {
+        res.status(400);
+        throw new Error("Category name can be up to 15 characters only");
+    }
+
     // Check if category already exists (case-insensitive)
     const existingCategory = await Category.findOne({
         name: { $regex: new RegExp(`^${name.trim()}$`, 'i') }
@@ -75,4 +80,29 @@ const getCategoryBySlug = asyncHandler(async (req, res) => {
     });
 });
 
-export { getCategories, createCategory, getCategoryBySlug };
+// @desc    Delete a category
+// @route   DELETE /api/categories/:id
+// @access  Private (requires admin)
+const deleteCategory = asyncHandler(async (req, res) => {
+    const category = await Category.findById(req.params.id);
+
+    if (!category) {
+        res.status(404);
+        throw new Error("Category not found");
+    }
+
+    // Optional: Prevent deleting default categories if needed
+    // if (category.isDefault) {
+    //     res.status(400);
+    //     throw new Error("Default categories cannot be deleted");
+    // }
+
+    await Category.findByIdAndDelete(req.params.id);
+
+    res.status(200).json({
+        success: true,
+        message: "Category deleted successfully",
+    });
+});
+
+export { getCategories, createCategory, getCategoryBySlug, deleteCategory };
