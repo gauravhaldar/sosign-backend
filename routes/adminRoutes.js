@@ -7,6 +7,7 @@ import {
   getUnapprovedPetitions,
   approvePetition,
   getAdminStats,
+  getWallets,
 } from "../controllers/adminController.js";
 import { adminAuth } from "../middleware/adminAuth.js";
 import {
@@ -41,6 +42,9 @@ router.post("/logout", adminLogout);
 
 //get user info
 router.get("/customers", getUsers);
+
+// Get user wallets
+router.get("/wallets", adminAuth, getWallets);
 
 // Get unapproved petitions
 router.get("/petitions/unapproved", adminAuth, getUnapprovedPetitions);

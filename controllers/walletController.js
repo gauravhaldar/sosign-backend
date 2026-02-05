@@ -26,20 +26,23 @@ const addMoney = asyncHandler(async (req, res) => {
 
     const wallet = await Wallet.getOrCreateWallet(req.user._id);
 
+    // Conversion rate: ₹5 = 1 Point
+    const pointsToAdd = parseFloat(amount) / 5;
+
     // Add transaction
     wallet.transactions.push({
         type: "credit",
-        amount: parseFloat(amount),
-        description: description || "Added money to wallet",
+        amount: pointsToAdd,
+        description: description || `Added ₹${amount} (${pointsToAdd} Points)`,
     });
 
     // Update balance
-    wallet.balance += parseFloat(amount);
+    wallet.balance += pointsToAdd;
 
     await wallet.save();
 
     res.status(200).json({
-        message: "Money added successfully",
+        message: "Money added successfully as points",
         balance: wallet.balance,
         transaction: wallet.transactions[wallet.transactions.length - 1],
     });

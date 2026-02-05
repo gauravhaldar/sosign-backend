@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import User from "../models/userModel.js";
 import Petition from "../models/petitionModel.js";
 import SuccessfulPetition from "../models/successfulPetitionModel.js";
+import Wallet from "../models/walletModel.js";
 
 const { ADMIN_EMAIL, ADMIN_PASSWORD } = process.env;
 
@@ -216,6 +217,39 @@ export const getAdminStats = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Error fetching statistics",
+    });
+  }
+};
+
+// @desc    Get all user wallets
+// @route   GET /api/admin/wallets
+// @access  Private/Admin
+export const getWallets = async (req, res) => {
+  try {
+    const users = await User.find({}, "name email");
+
+    // Fetch wallet for each user
+    const userWallets = await Promise.all(
+      users.map(async (user) => {
+        const wallet = await Wallet.findOne({ userId: user._id });
+        return {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          balance: wallet ? wallet.balance : 0,
+        };
+      })
+    );
+
+    res.status(200).json({
+      success: true,
+      wallets: userWallets,
+    });
+  } catch (error) {
+    console.error("Error fetching wallets:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching user wallets",
     });
   }
 };
