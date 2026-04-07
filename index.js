@@ -23,6 +23,8 @@ import hideRequestRoutes from "./routes/hideRequestRoutes.js";
 import categoryRoutes from "./routes/categoryRoutes.js";
 import captchaRoutes from "./routes/captchaRoutes.js";
 import walletRoutes from "./routes/walletRoutes.js";
+import walletRequestRoutes from "./routes/walletRequestRoutes.js";
+import aadhaarRoutes from "./routes/aadhaarRoutes.js";
 
 // Middleware
 import { notFound, errorHandler } from "./middleware/errorMiddleware.js";
@@ -35,12 +37,12 @@ dotenv.config();
 
 // Connect to database and seed default data
 connectDB().then(async () => {
-    // Seed default categories
-    try {
-        await Category.seedDefaults();
-    } catch (error) {
-        console.error("Error seeding categories:", error.message);
-    }
+  // Seed default categories
+  try {
+    await Category.seedDefaults();
+  } catch (error) {
+    console.error("Error seeding categories:", error.message);
+  }
 });
 
 const app = express();
@@ -49,69 +51,77 @@ const app = express();
 app.set("trust proxy", 1);
 
 // Security middleware
-app.use(helmet({
+app.use(
+  helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
-}));
+  }),
+);
 
 // Compression middleware
 // Compression middleware (level 6 offers good balance size/cpu)
-app.use(compression({
+app.use(
+  compression({
     level: 6,
-    threshold: 10 * 1000 // Only compress responses > 10KB
-}));
+    threshold: 10 * 1000, // Only compress responses > 10KB
+  }),
+);
 
 // Logging middleware (dev mode)
 if (process.env.NODE_ENV !== "production") {
-    app.use(morgan("dev"));
+  app.use(morgan("dev"));
 }
 
 // Rate limiting
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
-    message: {
-        error: "Too many requests from this IP, please try again after 15 minutes",
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: {
+    error: "Too many requests from this IP, please try again after 15 minutes",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 app.use("/api", limiter);
 
 // CORS configuration
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
-    : [
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001",
-        "https://sosign.vercel.app",
-        "https://sosign-admin.vercel.app",
+const allowedOrigins =
+  process.env.ALLOWED_ORIGINS ?
+    process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
+  : [
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "http://127.0.0.1:3000",
+      "http://127.0.0.1:3001",
+      "https://sosign.vercel.app",
+      "https://sosign-admin.vercel.app",
     ];
 
 app.use(
-    cors({
-        origin: function (origin, callback) {
-            // Allow requests with no origin (like mobile apps or curl requests)
-            if (!origin) return callback(null, true);
+  cors({
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
 
-            // In development, allow all localhost origins
-            if (process.env.NODE_ENV !== "production" && origin.includes("localhost")) {
-                return callback(null, true);
-            }
+      // In development, allow all localhost origins
+      if (
+        process.env.NODE_ENV !== "production" &&
+        origin.includes("localhost")
+      ) {
+        return callback(null, true);
+      }
 
-            if (allowedOrigins.indexOf(origin) !== -1) {
-                callback(null, true);
-            } else {
-                console.log("Blocked by CORS:", origin);
-                // Return false instead of throwing to avoid 500 errors
-                callback(null, false);
-            }
-        },
-        credentials: true,
-        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-        allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-    })
+      if (allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        console.log("Blocked by CORS:", origin);
+        // Return false instead of throwing to avoid 500 errors
+        callback(null, false);
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  }),
 );
 
 // Body parsing middleware
@@ -123,11 +133,11 @@ app.use(cookieParser());
 
 // Health check endpoint
 app.get("/health", (req, res) => {
-    res.status(200).json({
-        status: "ok",
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-    });
+  res.status(200).json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
 });
 
 // API Routes
@@ -143,26 +153,29 @@ app.use("/api/hide-requests", hideRequestRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/captcha", captchaRoutes);
 app.use("/api/wallet", walletRoutes);
+app.use("/api/wallet-requests", walletRequestRoutes);
+app.use("/api/aadhaar", aadhaarRoutes);
 
 // Root endpoint
 app.get("/", (req, res) => {
-    res.json({
-        message: "SOSign API Server",
-        version: "1.0.0",
-        endpoints: {
-            users: "/api/users",
-            petitions: "/api/petitions",
-            admin: "/api/admin",
-            comments: "/api/comments",
-            successfulPetitions: "/api/successful-petitions",
-            ads: "/api/ads",
-            downloadRequests: "/api/download-requests",
-            blogs: "/api/blogs",
-            categories: "/api/categories",
-            captcha: "/api/captcha",
-            health: "/health",
-        },
-    });
+  res.json({
+    message: "SOSign API Server",
+    version: "1.0.0",
+    endpoints: {
+      users: "/api/users",
+      petitions: "/api/petitions",
+      admin: "/api/admin",
+      comments: "/api/comments",
+      successfulPetitions: "/api/successful-petitions",
+      ads: "/api/ads",
+      downloadRequests: "/api/download-requests",
+      blogs: "/api/blogs",
+      categories: "/api/categories",
+      captcha: "/api/captcha",
+      aadhaar: "/api/aadhaar",
+      health: "/health",
+    },
+  });
 });
 
 // Error handling middleware
@@ -172,7 +185,7 @@ app.use(errorHandler);
 // Start server
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => {
-    console.log(`
+  console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                   SOSign Backend Server                   ║
 ╠═══════════════════════════════════════════════════════════╣
@@ -186,13 +199,13 @@ app.listen(PORT, () => {
 
 // Handle unhandled promise rejections
 process.on("unhandledRejection", (err, promise) => {
-    console.error(`Unhandled Rejection: ${err.message}`);
+  console.error(`Unhandled Rejection: ${err.message}`);
 });
 
 // Handle uncaught exceptions
 process.on("uncaughtException", (err) => {
-    console.error(`Uncaught Exception: ${err.message}`);
-    process.exit(1);
+  console.error(`Uncaught Exception: ${err.message}`);
+  process.exit(1);
 });
 
 export default app;

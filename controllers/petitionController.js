@@ -4,13 +4,29 @@ import User from "../models/userModel.js";
 import SuccessfulPetition from "../models/successfulPetitionModel.js";
 import cloudinary from "../config/cloudinary.js";
 import { sendPetitionNotificationEmails } from "../config/emailConfig.js";
+import {
+  normalizeAadhaarNumber,
+  isValidAadhaarNumber,
+  hashAadhaarNumber,
+  verifyAadhaarVerificationToken,
+} from "../utils/aadhaarVerificationUtils.js";
 
 // @desc    Create a new petition
 // @route   POST /api/petitions
 // @access  Private
 const createPetition = asyncHandler(async (req, res) => {
-  const { title, decisionMakers, country, petitionDetails, petitionStarter, categories, constituencySettings, signingRequirements } =
-    req.body;
+  const {
+    title,
+    decisionMakers,
+    country,
+    petitionDetails,
+    petitionStarter,
+    categories,
+    constituencySettings,
+    signingRequirements,
+    aadhaarVerificationToken,
+    aadharVerificationToken,
+  } = req.body;
 
   // Parse decisionMakers if it's a string (from FormData)
   let parsedDecisionMakers = decisionMakers;
@@ -126,6 +142,60 @@ const createPetition = asyncHandler(async (req, res) => {
   console.log("Derived userId for petition creation:", userId); // Debugging line
   console.log("parsedPetitionStarter before creation:", parsedPetitionStarter); // Debugging line
 
+  // Enforce Aadhaar OTP verification for petition creator.
+  const starterAadhaarRaw =
+    parsedPetitionStarter?.aadharNumber || parsedPetitionStarter?.aadhaarNumber;
+  const normalizedStarterAadhaar = normalizeAadhaarNumber(starterAadhaarRaw);
+
+  if (!isValidAadhaarNumber(normalizedStarterAadhaar)) {
+    res.status(400);
+    throw new Error("Please provide a valid 12-digit Aadhar number");
+  }
+
+  const verificationToken = (
+    aadhaarVerificationToken ||
+    aadharVerificationToken ||
+    ""
+  ).trim();
+
+  if (!verificationToken) {
+    res.status(400);
+    throw new Error(
+      "Aadhaar OTP verification is required before creating a petition",
+    );
+  }
+
+  let decodedVerificationToken;
+  try {
+    decodedVerificationToken =
+      verifyAadhaarVerificationToken(verificationToken);
+  } catch (error) {
+    res.status(401);
+    throw new Error(
+      "Invalid or expired Aadhaar verification. Please verify again.",
+    );
+  }
+
+  if (decodedVerificationToken.userId !== userId.toString()) {
+    res.status(403);
+    throw new Error("Aadhaar verification token does not belong to this user");
+  }
+
+  if (
+    decodedVerificationToken.aadhaarHash !==
+    hashAadhaarNumber(normalizedStarterAadhaar)
+  ) {
+    res.status(400);
+    throw new Error(
+      "Verified Aadhaar does not match the Aadhaar number entered in the form",
+    );
+  }
+
+  parsedPetitionStarter = {
+    ...parsedPetitionStarter,
+    aadharNumber: normalizedStarterAadhaar,
+  };
+
   // Handle image upload to Cloudinary if file is present
   let imageUrl = "";
   if (req.file) {
@@ -164,7 +234,7 @@ const createPetition = asyncHandler(async (req, res) => {
       await user.save();
       console.log(
         "Petition linked successfully. User petitions:",
-        user.petitions
+        user.petitions,
       );
     } else {
       console.log("User not found when attempting to link petition.", userId);
@@ -177,7 +247,7 @@ const createPetition = asyncHandler(async (req, res) => {
     console.log("Decision makers:", petition.decisionMakers);
     console.log(
       "Decision makers length:",
-      petition.decisionMakers ? petition.decisionMakers.length : 0
+      petition.decisionMakers ? petition.decisionMakers.length : 0,
     );
 
     if (petition.decisionMakers && petition.decisionMakers.length > 0) {
@@ -190,13 +260,13 @@ const createPetition = asyncHandler(async (req, res) => {
         .then((emailResult) => {
           if (emailResult.success) {
             console.log(
-              `✅ Email notifications sent: ${emailResult.totalSent} successful, ${emailResult.totalFailed} failed`
+              `✅ Email notifications sent: ${emailResult.totalSent} successful, ${emailResult.totalFailed} failed`,
             );
             console.log("📋 Email results:", emailResult.results);
           } else {
             console.error(
               "❌ Failed to send email notifications:",
-              emailResult.error
+              emailResult.error,
             );
           }
         })
@@ -205,7 +275,7 @@ const createPetition = asyncHandler(async (req, res) => {
         });
     } else {
       console.log(
-        "⚠️ No decision makers found or decision makers array is empty"
+        "⚠️ No decision makers found or decision makers array is empty",
       );
     }
 
@@ -252,7 +322,7 @@ const getPetitions = asyncHandler(async (req, res) => {
   if (category) {
     // Categories is an array field with lowercase values (education, human_rights, etc.)
     // Convert the category to lowercase and use $in to match
-    const categoryLower = category.toLowerCase().replace(/\s+/g, '_');
+    const categoryLower = category.toLowerCase().replace(/\s+/g, "_");
     query.categories = { $in: [categoryLower] };
   }
 
@@ -361,7 +431,10 @@ const getPetitionById = asyncHandler(async (req, res) => {
   if (isValidObjectId) {
     // Try to find by ID first
     petition = await Petition.findById(idOrSlug)
-      .populate("petitionStarter.user", "name email designation uniqueCode profilePicture")
+      .populate(
+        "petitionStarter.user",
+        "name email designation uniqueCode profilePicture",
+      )
       .select({ signatures: { $slice: -20 } })
       .populate("signatures.user", "name email uniqueCode")
       .populate("signatures.referral.owner", "name email uniqueCode");
@@ -370,7 +443,10 @@ const getPetitionById = asyncHandler(async (req, res) => {
   // If not found by ID, try to find by slug
   if (!petition) {
     petition = await Petition.findOne({ slug: idOrSlug })
-      .populate("petitionStarter.user", "name email designation uniqueCode profilePicture")
+      .populate(
+        "petitionStarter.user",
+        "name email designation uniqueCode profilePicture",
+      )
       .select({ signatures: { $slice: -20 } })
       .populate("signatures.user", "name email uniqueCode")
       .populate("signatures.referral.owner", "name email uniqueCode");
@@ -401,7 +477,14 @@ const updatePetition = asyncHandler(async (req, res) => {
     throw new Error("Not authorized to update this petition");
   }
 
-  const { title, decisionMakers, country, petitionDetails, constituencySettings, signingRequirements } = req.body;
+  const {
+    title,
+    decisionMakers,
+    country,
+    petitionDetails,
+    constituencySettings,
+    signingRequirements,
+  } = req.body;
 
   // Update only the fields that are provided
   if (title !== undefined) petition.title = title;
@@ -416,14 +499,16 @@ const updatePetition = asyncHandler(async (req, res) => {
   if (constituencySettings !== undefined) {
     petition.constituencySettings = {
       required: constituencySettings.required || false,
-      allowedConstituency: constituencySettings.allowedConstituency || undefined,
+      allowedConstituency:
+        constituencySettings.allowedConstituency || undefined,
     };
   }
   if (signingRequirements !== undefined) {
     petition.signingRequirements = {
       constituency: {
         required: signingRequirements.constituency?.required || false,
-        allowedConstituency: signingRequirements.constituency?.allowedConstituency || undefined,
+        allowedConstituency:
+          signingRequirements.constituency?.allowedConstituency || undefined,
       },
       aadhar: {
         required: signingRequirements.aadhar?.required || false,
@@ -493,7 +578,7 @@ const getUserPetitions = asyncHandler(async (req, res) => {
       .lean(),
     Petition.countDocuments({
       "petitionStarter.user": req.user._id,
-    })
+    }),
   ]);
 
   res.status(200).json({
@@ -534,7 +619,7 @@ const signPetition = asyncHandler(async (req, res) => {
 
   // Check if user has already signed this petition
   const hasAlreadySigned = petition.signatures.some(
-    (signature) => signature.user.toString() === req.user._id.toString()
+    (signature) => signature.user.toString() === req.user._id.toString(),
   );
 
   if (hasAlreadySigned) {
@@ -555,9 +640,13 @@ const signPetition = asyncHandler(async (req, res) => {
 
     // Check if specific constituency is required
     if (petition.constituencySettings.allowedConstituency) {
-      if (constituencyNumber !== petition.constituencySettings.allowedConstituency) {
+      if (
+        constituencyNumber !== petition.constituencySettings.allowedConstituency
+      ) {
         res.status(400);
-        throw new Error(`This petition is restricted to constituency: ${petition.constituencySettings.allowedConstituency}`);
+        throw new Error(
+          `This petition is restricted to constituency: ${petition.constituencySettings.allowedConstituency}`,
+        );
       }
     }
   }
@@ -571,9 +660,14 @@ const signPetition = asyncHandler(async (req, res) => {
 
     // Check if specific constituency is required
     if (petition.signingRequirements.constituency.allowedConstituency) {
-      if (constituencyNumber !== petition.signingRequirements.constituency.allowedConstituency) {
+      if (
+        constituencyNumber !==
+        petition.signingRequirements.constituency.allowedConstituency
+      ) {
         res.status(400);
-        throw new Error(`This petition is restricted to constituency: ${petition.signingRequirements.constituency.allowedConstituency}`);
+        throw new Error(
+          `This petition is restricted to constituency: ${petition.signingRequirements.constituency.allowedConstituency}`,
+        );
       }
     }
   }
@@ -654,7 +748,7 @@ const checkUserSignature = asyncHandler(async (req, res) => {
 
   // Check if user has already signed this petition
   const hasAlreadySigned = petition.signatures.some(
-    (signature) => signature.user.toString() === req.user._id.toString()
+    (signature) => signature.user.toString() === req.user._id.toString(),
   );
 
   // Check if user is the creator of the petition
@@ -691,7 +785,7 @@ const getPetitionsByCountry = asyncHandler(async (req, res) => {
     Petition.countDocuments({
       country: req.params.country,
       approved: true,
-    })
+    }),
   ]);
 
   res.status(200).json({
@@ -756,13 +850,13 @@ const getPetitionStats = asyncHandler(async (req, res) => {
     ]);
 
     const activeSignatures =
-      activeSignatureStats.length > 0
-        ? activeSignatureStats[0].totalSignatures
-        : 0;
+      activeSignatureStats.length > 0 ?
+        activeSignatureStats[0].totalSignatures
+      : 0;
     const successfulSignatures =
-      successfulSignatureStats.length > 0
-        ? successfulSignatureStats[0].totalSignatures
-        : 0;
+      successfulSignatureStats.length > 0 ?
+        successfulSignatureStats[0].totalSignatures
+      : 0;
     const totalSignatures = activeSignatures + successfulSignatures;
 
     // Get total users count

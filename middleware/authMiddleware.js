@@ -2,35 +2,75 @@ import jwt from "jsonwebtoken";
 import asyncHandler from "express-async-handler";
 import User from "../models/userModel.js";
 
-const protect = asyncHandler(async (req, res, next) => {
-  let token;
-
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-    try {
-      // Get token from header
-      token = req.headers.authorization.split(' ')[1];
-
-      // Verify token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || "default_jwt_secret_key");
-      req.user = await User.findById(decoded.userId).select('-password');
-      
-      if (!req.user) {
-        res.status(401);
-        throw new Error('User not found');
-      }
-      
-      next();
-    } catch (error) {
-      console.error('Auth middleware error:', error);
-      console.error('Token:', token);
-      console.error('JWT_SECRET available:', !!process.env.JWT_SECRET);
-      res.status(401);
-      throw new Error('Not authorized, token failed');
-    }
-  } else {
-    res.status(401);
-    throw new Error('Not authorized, no token');
+const getBearerToken = (authorizationHeader = "") => {
+  if (!authorizationHeader || !authorizationHeader.startsWith("Bearer ")) {
+    return null;
   }
+
+  return authorizationHeader.split(" ")[1] || null;
+};
+
+const sanitizeToken = (token = "") => {
+  return String(token).trim().replace(/^"|"$/g, "");
+};
+
+const extractCandidateTokens = (req) => {
+  const tokens = [];
+
+  const bearerToken = getBearerToken(req.headers.authorization);
+  if (bearerToken) {
+    tokens.push(sanitizeToken(bearerToken));
+  }
+
+  const cookieToken = req.cookies?.jwt;
+  if (cookieToken) {
+    tokens.push(sanitizeToken(cookieToken));
+  }
+
+  return [...new Set(tokens.filter(Boolean))];
+};
+
+const protect = asyncHandler(async (req, res, next) => {
+  const tokenCandidates = extractCandidateTokens(req);
+
+  if (!tokenCandidates.length) {
+    res.status(401);
+    throw new Error("Not authorized, no token");
+  }
+
+  let decodedToken = null;
+  let lastVerifyError = null;
+
+  for (const token of tokenCandidates) {
+    try {
+      decodedToken = jwt.verify(
+        token,
+        process.env.JWT_SECRET || "default_jwt_secret_key",
+      );
+      break;
+    } catch (error) {
+      lastVerifyError = error;
+    }
+  }
+
+  if (!decodedToken) {
+    if (lastVerifyError?.name === "TokenExpiredError") {
+      res.status(401);
+      throw new Error("Not authorized, token expired");
+    }
+
+    res.status(401);
+    throw new Error("Not authorized, token failed");
+  }
+
+  req.user = await User.findById(decodedToken.userId).select("-password");
+
+  if (!req.user) {
+    res.status(401);
+    throw new Error("User not found");
+  }
+
+  next();
 });
 
 export { protect };
