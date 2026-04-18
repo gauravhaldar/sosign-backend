@@ -153,7 +153,6 @@ petitionSchema.index({ approved: 1, hidden: 1, createdAt: -1 }); // For default 
 petitionSchema.index({ approved: 1, hidden: 1, numberOfSignatures: -1 }); // For popular active petitions
 petitionSchema.index({ approved: 1, hidden: 1, categories: 1 }); // For filtering by category
 petitionSchema.index({ approved: 1, hidden: 1, country: 1 }); // For filtering by country
-=======
 // Indexes for performance optimization
 petitionSchema.index({ approved: 1, createdAt: -1 }); // For default listing (recent petitions)
 petitionSchema.index({ approved: 1, numberOfSignatures: -1 }); // For popular petitions
