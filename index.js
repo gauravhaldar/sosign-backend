@@ -97,7 +97,10 @@ const allowedOrigins =
      "https://sosign-admin-one.vercel.app/login",
     ];
 
-app.use(cors());
+app.use(cors({
+  origin: "*",
+  credentials: false
+}));
 
 // Body parsing middleware
 app.use(express.json({ limit: "10mb" }));
